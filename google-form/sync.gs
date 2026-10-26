@@ -48,7 +48,7 @@ function setupSync() {
     if (sh.getFormUrl() || ss.getSheets().length < 2) return;
     const n = sh.getLastRow(), c = sh.getLastColumn();
     const empty = n < 2 || sh.getRange(2, 1, n - 1, c).getValues().every(r => r.every(v => v === '' || v === false));
-    if (empty) { ss.deleteSheet(sh); Logger.log('빈 응답 탭을 지웠습니다: ' + sh.getName()); }
+    if (empty) { const nm = sh.getName(); ss.deleteSheet(sh); Logger.log('빈 응답 탭을 지웠습니다: ' + nm); }
   });
 
   const t = fs_('get', DOCS + '/admins?pageSize=1');
@@ -77,7 +77,10 @@ function syncAll() {
   const sh = responseSheet_(), head = header_(sh);
   if (head.approve == null) { Logger.log('‘승인’ 열이 없습니다.'); return; }
   let n = 0;
-  withLock_(() => { for (let r = 2; r <= sh.getLastRow(); r++) n += syncIfNeeded_(sh, r, head) ? 1 : 0; });
+  withLock_(() => {
+    const all = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getDisplayValues(); // 한 번에 읽기
+    for (let r = 2; r <= all.length; r++) n += syncIfNeeded_(sh, r, head, all[r - 1]) ? 1 : 0;
+  });
   Logger.log('반영한 줄: ' + n);
 }
 
@@ -93,9 +96,8 @@ function onNewResponse(e) {
 }
 
 /* ---------- 한 줄 처리 ---------- */
-function syncIfNeeded_(sh, r, head) {
-  const lastCol = sh.getLastColumn();
-  const row = sh.getRange(r, 1, 1, lastCol).getDisplayValues()[0];
+function syncIfNeeded_(sh, r, head, values) {
+  const row = values || sh.getRange(r, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
   const cell = k => head[k] == null ? '' : String(row[head[k]] || '').trim();
   if (!cell('email') && !cell('name')) return false;
   if (!/^(true|o|y|yes|예|승인|v|✓|✔|1|☑)$/i.test(cell('approve'))) return false;

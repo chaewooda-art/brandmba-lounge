@@ -1,0 +1,155 @@
+rules_version = '2';
+
+// BM 동문 라운지 보안 규칙 (신청서 방식)
+// 동문 등록은 운영진이 구글 폼 응답을 가져와서 합니다.
+// 동문 ID는 '로그인 이메일(소문자)'의 SHA-256 값이라, 같은 이메일로 로그인한 사람만 자기 기록과 연결됩니다.
+//  - 동문 프로필(members): 명부에 올라간(approved) 동문끼리만 볼 수 있음. 등록은 운영진만.
+//  - 연락처(contacts): 본인, 운영진, 공개에 동의한 사람, 소개 요청을 수락한 상대만
+//  - 소개 요청(intros): 보낸 사람과 받은 사람만
+//  - 탈퇴 기록(withdrawn): 다시 가져오기 할 때 되살아나지 않게 남기는 표시(이메일·이름 없음)
+//  - 운영진 목록(admins): Firebase 콘솔에서만 추가·삭제
+// 그 밖의 모든 읽기·쓰기는 기본으로 막힙니다.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- 공통 ----------
+    function signedIn() { return request.auth != null; }
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true && request.auth.token.email is string;
+    }
+    function midOf(email) { return hashing.sha256(email.lower()).toHexString().lower(); }
+    function myMid() { return midOf(request.auth.token.email); }
+    function isMe(mid) { return verified() && myMid() == mid; }
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function memberPath(mid) { return /databases/$(database)/documents/members/$(mid); }
+    function isApprovedMid(mid) { return exists(memberPath(mid)) && get(memberPath(mid)).data.status == 'approved'; }
+    function isApproved() { return verified() && isApprovedMid(myMid()); }
+
+    // 선택지 키: public/js/constants.js 와 같아야 합니다.
+    function industryList() { return ['food','beauty','retail','agency','service','mfg','public','etc']; }
+    function fnList() { return ['mkt','brand','design','cx','content','sales','strat','ceo','fin','ops','edu','etc']; }
+    function helpList() { return ['brand','design','perf','content','channel','global','invest','hiring','data','mentor','partner']; }
+
+    function textOk(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function pickOk(v) {
+      return v is list && v.size() <= 3 && v.toSet().size() == v.size() && v.hasOnly(helpList());
+    }
+    function profileOk(d) {
+      return d.keys().hasOnly(['name','cohort','industry','fn','org','title','offer','need','intro','status','createdAt','updatedAt'])
+        && d.keys().hasAll(['name','cohort','industry','fn','org','title','offer','need','intro','status','createdAt','updatedAt'])
+        && textOk(d.name, 1, 20)
+        && d.cohort is int && d.cohort >= 1 && d.cohort <= 80
+        && d.industry in industryList()
+        && d.fn in fnList()
+        && textOk(d.org, 1, 40)
+        && textOk(d.title, 1, 40)
+        && pickOk(d.offer)
+        && pickOk(d.need)
+        && textOk(d.intro, 0, 60)
+        && d.status in ['approved','hidden'];
+    }
+
+    // ---------- 동문 프로필 ----------
+    match /members/{mid} {
+      allow get: if isAdmin() || isMe(mid) || (isApproved() && resource.data.status == 'approved');
+      allow list: if isAdmin() || (isApproved() && resource.data.status == 'approved');
+
+      // 등록: 운영진만 (신청서 가져오기)
+      allow create: if isAdmin()
+        && profileOk(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if
+        // 본인: 프로필만 고칠 수 있고 명부 상태와 등록일은 못 바꿈
+        (isMe(mid)
+          && profileOk(request.resource.data)
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time)
+        // 운영진: 명부 상태 변경, 신청서 내용으로 덮어쓰기
+        || (isAdmin()
+          && profileOk(request.resource.data)
+          && request.resource.data.updatedAt == request.time);
+
+      allow delete: if isMe(mid) || isAdmin();
+    }
+
+    // ---------- 연락처 ----------
+    function introPath(a, b) { return /databases/$(database)/documents/intros/$(a + '_' + b); }
+    function accepted(a, b) { return exists(introPath(a, b)) && get(introPath(a, b)).data.status == 'accepted'; }
+    function contactOk(d, mid) {
+      return d.keys().hasOnly(['email','phone','share','consent'])
+        && d.email is string && midOf(d.email) == mid
+        && textOk(d.phone, 0, 20)
+        && d.share is bool
+        && d.consent is map
+        && d.consent.keys().hasOnly(['map','privacy','version','at','via'])
+        && d.consent.map == true && d.consent.privacy == true
+        && textOk(d.consent.version, 1, 20)
+        && d.consent.at is timestamp;
+    }
+    match /contacts/{mid} {
+      allow get: if isAdmin() || isMe(mid)
+        || (isApproved() && isApprovedMid(mid)
+            && (resource.data.share == true || accepted(myMid(), mid) || accepted(mid, myMid())));
+      allow list: if isAdmin();
+      allow create: if isAdmin() && contactOk(request.resource.data, mid)
+        && request.resource.data.consent.at == request.time;
+      allow update: if
+        // 본인: 휴대폰과 공개 여부만
+        (isMe(mid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phone','share'])
+          && textOk(request.resource.data.phone, 0, 20)
+          && request.resource.data.share is bool)
+        || (isAdmin() && contactOk(request.resource.data, mid));
+      allow delete: if isMe(mid) || isAdmin();
+    }
+
+    // ---------- 소개 요청 ----------
+    // 문서 ID = 보낸동문ID_받는동문ID
+    match /intros/{id} {
+      allow get: if isAdmin() || (verified() && (id.split('_')[0] == myMid() || id.split('_')[1] == myMid()));
+      allow list: if verified() && (resource.data.from == myMid() || resource.data.to == myMid());
+
+      allow create: if isApproved()
+        && request.resource.data.keys().hasOnly(['from','to','fromName','fromCohort','message','status','createdAt'])
+        && request.resource.data.from == myMid()
+        && request.resource.data.to is string
+        && request.resource.data.to != myMid()
+        && id == myMid() + '_' + request.resource.data.to
+        && isApprovedMid(request.resource.data.to)
+        && request.resource.data.fromName == get(memberPath(myMid())).data.name
+        && request.resource.data.fromCohort == get(memberPath(myMid())).data.cohort
+        && textOk(request.resource.data.message, 1, 500)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time;
+
+      // 받은 사람만 수락·거절
+      allow update: if verified() && resource.data.to == myMid()
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','respondedAt'])
+        && request.resource.data.status in ['accepted','declined']
+        && request.resource.data.respondedAt == request.time;
+
+      allow delete: if verified() && (resource.data.from == myMid() || resource.data.to == myMid());
+    }
+
+    // ---------- 탈퇴 기록 ----------
+    match /withdrawn/{mid} {
+      allow create, update: if isMe(mid)
+        && request.resource.data.keys().hasOnly(['at'])
+        && request.resource.data.at == request.time;
+      allow get, list, delete: if isAdmin();
+    }
+
+    // ---------- 운영진 목록 ----------
+    // 문서 ID = 운영진 로그인 계정의 UID. 추가와 삭제는 Firebase 콘솔에서만.
+    match /admins/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}

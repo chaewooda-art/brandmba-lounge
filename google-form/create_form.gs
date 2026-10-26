@@ -87,7 +87,7 @@ function createLoungeForm() {
   form.addTextItem().setTitle('회사·소속').setHelpText('예: CJ제일제당, 개인 스튜디오, ○○대학교').setRequired(true).setValidation(maxLen(40));
   form.addTextItem().setTitle('직무·직책').setHelpText('예: 브랜드전략팀 팀장').setRequired(true).setValidation(maxLen(40));
   form.addMultipleChoiceItem().setTitle('업종').setChoiceValues(INDUSTRIES).setRequired(true);
-  form.addMultipleChoiceItem().setTitle('직무 분야').setChoiceValues(FUNCTIONS).setRequired(true);
+  form.addCheckboxItem().setTitle('직무 분야').setHelpText('최대 3개 · 가까운 것부터 골라 주세요.').setChoiceValues(FUNCTIONS).setRequired(true).setValidation(atMost3());
   form.addMultipleChoiceItem().setTitle('총 경력 연차').setChoiceValues(YEARS).setRequired(true);
   form.addParagraphTextItem().setTitle('주요 경력')
     .setHelpText('선택 · 한 줄에 하나씩, 최대 3줄. ‘회사 · 직무 · 기간’ 순서로 적으면 같은 회사를 거친 사람을 찾아 드려요.\n예)\nCJ제일제당 · 브랜드매니저 · 2015–2020\n○○에이전시 · AE · 2011–2015')
@@ -165,4 +165,46 @@ function createLoungeForm() {
   Logger.log('신청서 주소: ' + shortUrl);
   Logger.log('신청서 수정 주소(운영진): ' + form.getEditUrl());
   Logger.log('응답 시트 주소(운영진): ' + ss.getUrl());
+}
+
+/* ---------- 고치기 ---------- */
+
+// 이미 만든 신청서의 '직무 분야'를 한 개 선택 → 최대 3개 선택으로 바꿉니다(응답이 없을 때만).
+// 응답 시트 머리글도 새 질문 순서로 다시 만들고, '승인'·'라운지 반영' 열을 다시 붙입니다.
+function fixFnQuestion() {
+  const P = PropertiesService.getScriptProperties();
+  const form = FormApp.openById(P.getProperty('FORM_ID'));
+  if (form.getResponses().length) throw new Error('응답이 이미 있어 바꾸지 않았습니다. 폼 편집 화면에서 질문 유형을 체크박스로 바꿔 주세요.');
+  const find = title => form.getItems().filter(i => i.getTitle() === title)[0];
+  let fn = find('직무 분야');
+  if (!fn) throw new Error('‘직무 분야’ 질문을 찾지 못했습니다.');
+  if (fn.getType() !== FormApp.ItemType.CHECKBOX) {
+    const cb = form.addCheckboxItem().setTitle('직무 분야').setHelpText('최대 3개 · 가까운 것부터 골라 주세요.')
+      .setChoiceValues(FUNCTIONS).setRequired(true)
+      .setValidation(FormApp.createCheckboxValidation().requireSelectAtMost(3).setHelpText('3개까지 골라 주세요.').build());
+    form.deleteItem(fn);
+    fn = form.getItemById(cb.getId());
+  }
+  // '업종' 바로 다음 자리로
+  const target = find('업종').getIndex() + 1;
+  if (fn.getIndex() !== target) form.moveItem(fn.getIndex(), fn.getIndex() > target ? target : target - 1);
+
+  // 응답 시트: 같은 파일 안에 새 응답 탭을 만들고, 머리글만 있는 이전 탭은 지움
+  const ss = SpreadsheetApp.openById(P.getProperty('SHEET_ID'));
+  form.removeDestination();
+  form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
+  SpreadsheetApp.flush();
+  Utilities.sleep(3000);
+  const sheet = ss.getSheets().filter(s => s.getFormUrl())[0];
+  if (!sheet) throw new Error('새 응답 탭을 찾지 못했습니다.');
+  ss.getSheets().forEach(s => { if (s.getSheetId() !== sheet.getSheetId() && s.getLastRow() <= 1) ss.deleteSheet(s); });
+  const col = sheet.getLastColumn() + 1;
+  sheet.getRange(1, col, 1, 2).setValues([['승인', '라운지 반영']]).setFontWeight('bold').setBackground('#f6e7ea');
+  sheet.getRange(2, col, 998, 1).insertCheckboxes();
+  sheet.setColumnWidth(col + 1, 220);
+  sheet.setFrozenRows(1);
+  ss.setActiveSheet(sheet);
+  ss.moveActiveSheet(1);
+
+  Logger.log('직무 분야를 최대 3개 선택으로 바꿨습니다. 응답 시트 머리글: ' + sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].join(' | '));
 }

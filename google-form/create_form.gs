@@ -36,6 +36,8 @@ const FUNCTIONS = ['마케팅', '브랜드 전략', '디자인', '고객경험·
 const YEARS = ['3년 이하', '4~7년', '8~12년', '13~19년', '20년 이상'];
 const HELPS = ['브랜드 전략 자문', '디자인·BX', '퍼포먼스 마케팅', '콘텐츠·SNS', '유통 채널 연결', '해외 진출', '투자·재무', '채용·인재 추천', '데이터 분석', '강연·멘토링', '공동 프로젝트·제휴'];
 const AGREE = '동의합니다';
+const FN_HELP = '최대 3개 · 가까운 것부터 골라 주세요. 목록에 없으면 ‘기타’에 직접 적어 주세요.';
+const HELP_HELP = '최대 3개 · 목록에 없으면 ‘기타’에 직접 적어 주세요.';
 
 function createLoungeForm() {
   const maxLen = n => FormApp.createTextValidation().requireTextLengthLessThanOrEqualTo(n).setHelpText(n + '자 이내로 적어 주세요.').build();
@@ -87,7 +89,7 @@ function createLoungeForm() {
   form.addTextItem().setTitle('회사·소속').setHelpText('예: CJ제일제당, 개인 스튜디오, ○○대학교').setRequired(true).setValidation(maxLen(40));
   form.addTextItem().setTitle('직무·직책').setHelpText('예: 브랜드전략팀 팀장').setRequired(true).setValidation(maxLen(40));
   form.addMultipleChoiceItem().setTitle('업종').setChoiceValues(INDUSTRIES).setRequired(true);
-  form.addCheckboxItem().setTitle('직무 분야').setHelpText('최대 3개 · 가까운 것부터 골라 주세요.').setChoiceValues(FUNCTIONS).setRequired(true).setValidation(atMost3());
+  form.addCheckboxItem().setTitle('직무 분야').setHelpText(FN_HELP).setChoiceValues(FUNCTIONS.filter(x => x !== '기타')).showOtherOption(true).setRequired(true).setValidation(atMost3());
   form.addMultipleChoiceItem().setTitle('총 경력 연차').setChoiceValues(YEARS).setRequired(true);
   form.addParagraphTextItem().setTitle('주요 경력')
     .setHelpText('선택 · 한 줄에 하나씩, 최대 3줄. ‘회사 · 직무 · 기간’ 순서로 적으면 같은 회사를 거친 사람을 찾아 드려요.\n예)\nCJ제일제당 · 브랜드매니저 · 2015–2020\n○○에이전시 · AE · 2011–2015')
@@ -96,8 +98,8 @@ function createLoungeForm() {
   // 5쪽: 모두
   form.addPageBreakItem().setTitle('라운지에서 주고받을 것')
     .setHelpText('두 질문은 같은 목록이에요. 내가 필요한 것을 다른 사람이 줄 수 있으면 라운지가 서로를 추천해 드려요.');
-  form.addCheckboxItem().setTitle('내가 줄 수 있는 것').setHelpText('최대 3개').setChoiceValues(HELPS).setRequired(true).setValidation(atMost3());
-  form.addCheckboxItem().setTitle('내가 필요한 것').setHelpText('최대 3개').setChoiceValues(HELPS).setRequired(true).setValidation(atMost3());
+  form.addCheckboxItem().setTitle('내가 줄 수 있는 것').setHelpText(HELP_HELP).setChoiceValues(HELPS).showOtherOption(true).setRequired(true).setValidation(atMost3());
+  form.addCheckboxItem().setTitle('내가 필요한 것').setHelpText(HELP_HELP).setChoiceValues(HELPS).showOtherOption(true).setRequired(true).setValidation(atMost3());
   form.addTextItem().setTitle('한 줄 소개').setHelpText('선택 · 라운지 이용자에게 보일 한 문장').setValidation(maxLen(60));
 
   // 6쪽: 모두
@@ -207,4 +209,16 @@ function fixFnQuestion() {
   ss.moveActiveSheet(1);
 
   Logger.log('직무 분야를 최대 3개 선택으로 바꿨습니다. 응답 시트 머리글: ' + sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].join(' | '));
+}
+
+// 이미 만든 신청서의 '직무 분야', '내가 줄 수 있는 것', '내가 필요한 것'에 직접 적는 '기타'를 붙입니다.
+// '직무 분야'의 일반 선택지 '기타'는 직접 적는 '기타'로 바꿉니다. 여러 번 실행해도 됩니다.
+function addOtherOptions() {
+  const form = FormApp.openById(PropertiesService.getScriptProperties().getProperty('FORM_ID'));
+  const find = title => form.getItems().filter(i => i.getTitle() === title)[0];
+  const fn = find('직무 분야').asCheckboxItem();
+  fn.setChoiceValues(FUNCTIONS.filter(x => x !== '기타')).showOtherOption(true).setHelpText(FN_HELP);
+  ['내가 줄 수 있는 것', '내가 필요한 것'].forEach(t => find(t).asCheckboxItem().showOtherOption(true).setHelpText(HELP_HELP));
+  const show = t => { const it = find(t).asCheckboxItem(); return t + ': ' + it.getChoices().map(c => c.getValue()).join(', ') + (it.hasOtherOption() ? ', 기타(직접 입력)' : ''); };
+  Logger.log(['직무 분야', '내가 줄 수 있는 것', '내가 필요한 것'].map(show).join('\n'));
 }

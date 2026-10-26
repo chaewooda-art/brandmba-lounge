@@ -5,12 +5,12 @@
 //    (데이터 보호는 firestore.rules 가 서버에서 맡습니다.)
 // ─────────────────────────────────────────────────────────────
 export const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyC_Rgg4bwWCR4fcfI7EuRM_1MPkCxe8IKE",
+  authDomain: "brandmba-lounge.firebaseapp.com",
+  projectId: "brandmba-lounge",
+  storageBucket: "brandmba-lounge.firebasestorage.app",
+  messagingSenderId: "414533002579",
+  appId: "1:414533002579:web:b154be39c0e97c33ceeda6"
 };
 
 // 2) 동문 신청서(구글 폼) 주소. 비워 두면 링크 버튼이 숨겨집니다.

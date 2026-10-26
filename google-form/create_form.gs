@@ -14,7 +14,8 @@
  * 바꾸려면 public/js/constants.js 의 FORM_COLUMNS·선택지 목록도 똑같이 바꿔 주세요.
  */
 
-const LOUNGE_URL = 'https://lounge.brandmba.com';
+// 라운지 주소. lounge.brandmba.com 을 연결하면 폼 설명·확인 메시지의 주소도 폼 수정 화면에서 바꿔 주세요.
+const LOUNGE_URL = 'https://chaewooda-art.github.io/brandmba-lounge';
 
 const INDUSTRIES = ['식품·외식', '뷰티·패션', '유통·커머스', '브랜드·광고 에이전시', 'IT·통신·서비스', '제조·건설', '금융·공공', '기타'];
 const FUNCTIONS = ['마케팅', '브랜드 전략', '디자인', '고객경험·BX', '콘텐츠·PR', '영업·MD', '전략·사업기획', '경영(대표)', '재무·투자', '운영·시스템', '교육·HR', '기타'];

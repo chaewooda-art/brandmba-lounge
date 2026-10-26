@@ -32,15 +32,24 @@ service cloud.firestore {
     function industryList() { return ['food','beauty','retail','agency','service','mfg','public','etc']; }
     function fnList() { return ['mkt','brand','design','cx','content','sales','strat','ceo','fin','ops','edu','etc']; }
     function helpList() { return ['brand','design','perf','content','channel','global','invest','hiring','data','mentor','partner']; }
+    function typeList() { return ['grad','student']; }
+    function yearsList() { return ['y0','y4','y8','y13','y20']; }
 
     function textOk(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
     function pickOk(v) {
       return v is list && v.size() <= 3 && v.toSet().size() == v.size() && v.hasOnly(helpList());
     }
+    // 주요 경력: 최대 3줄, 한 줄 60자
+    function lineOk(c, i) { return c.size() <= i || textOk(c[i], 1, 60); }
+    function careerOk(c) { return c is list && c.size() <= 3 && lineOk(c, 0) && lineOk(c, 1) && lineOk(c, 2); }
     function profileOk(d) {
-      return d.keys().hasOnly(['name','cohort','industry','fn','org','title','offer','need','intro','status','createdAt','updatedAt'])
-        && d.keys().hasAll(['name','cohort','industry','fn','org','title','offer','need','intro','status','createdAt','updatedAt'])
+      return d.keys().hasOnly(['name','type','cohort','industry','fn','org','title','years','career','thesis','offer','need','intro','status','createdAt','updatedAt'])
+        && d.keys().hasAll(['name','type','cohort','industry','fn','org','title','years','career','thesis','offer','need','intro','status','createdAt','updatedAt'])
         && textOk(d.name, 1, 20)
+        && d.type in typeList()
+        && d.years in yearsList()
+        && careerOk(d.career)
+        && textOk(d.thesis, 0, 100)
         && d.cohort is int && d.cohort >= 1 && d.cohort <= 80
         && d.industry in industryList()
         && d.fn in fnList()

@@ -1,10 +1,11 @@
 // 라운지 화면과 흐름 (신청서 방식)
 // 구글 폼 신청 → 운영진이 응답을 가져와 등록 → 동문은 신청서 이메일로 '처음 로그인' → 지도·명부·소개 요청
 
-import { INDUSTRIES as IND, FUNCTIONS as FN, HELPS as HELP, MAX_PICK, FORM_COLUMNS as COL, SHARE_YES, AGREE } from './constants.js';
+import { INDUSTRIES as IND, FUNCTIONS as FN, HELPS as HELP, TYPES, YEARS, MAX_PICK, MAX_CAREER, CAREER_LEN, THESIS_LEN, FORM_COLUMNS as COL, SHARE_YES, AGREE } from './constants.js';
 import * as api from './api.js';
 import { ENABLE_GOOGLE, FORM_URL } from './config.js';
 import { mountNetwork } from './network.js';
+import { recommend, synergy, companyGroups } from './synergy.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,12 +17,19 @@ const tags = (arr, dict = HELP) => (arr && arr.length)
 const when = ts => { const d = ts && ts.toDate ? ts.toDate() : null; return d ? `${d.getMonth() + 1}월 ${d.getDate()}일` : '방금'; };
 const ms = ts => (ts && ts.toMillis ? ts.toMillis() : Date.now());
 const formLink = (cls = 'btn btn-ghost') => FORM_URL ? `<a class="${cls}" href="${esc(FORM_URL)}" target="_blank" rel="noopener">신청서 작성하기</a>` : '';
+// '22기', 재학생이면 '22기 재학'
+const cohortLabel = u => `${u.cohort}기${u.type === 'student' ? ' 재학' : ''}`;
+const yearsLabel = u => (YEARS[u.years] ? `경력 ${YEARS[u.years]}` : '');
+const careerList = u => (u.career || []).filter(Boolean);
+const careerHTML = u => careerList(u).length
+  ? `<ul class="career">${careerList(u).map(l => `<li>${esc(l)}</li>`).join('')}</ul>`
+  : '<span class="muted">비어 있음</span>';
 
 const S = {
   user: null, mid: null, admin: false, member: null, members: [], intros: { received: [], sent: [] },
   all: [], allContacts: {}, withdrawn: new Set(), imp: null, adminQ: '',
   view: 'boot', loginTab: 'login', form: null,
-  filter: { q: '', ind: 'all', helpMe: false }, netSel: null,
+  filter: { q: '', ind: 'all', type: 'all', helpMe: false }, netSel: null,
   unsubMember: null, net: null, withdrawing: false, lastStatus: undefined
 };
 
@@ -188,15 +196,22 @@ V.form = () => {
         ${inp('name', '이름', 'text', 'autocomplete="name" maxlength="20"')}
         ${inp('cohort', '기수', 'text', 'inputmode="numeric" maxlength="2"')}
       </div>
+      ${grp('type', '구분', TYPES, 1, true)}
+      ${inp('thesis', `학위논문 제목 <small>선택 · 최대 ${THESIS_LEN}자</small>`, 'text', `maxlength="${THESIS_LEN}" placeholder="논문 주제가 비슷한 동문을 찾아 드려요"`)}
       <div class="field"><span class="label">로그인 이메일</span><p class="static">${esc(S.user.email)}</p><p class="mini">이메일을 바꾸려면 운영진에게 요청해 주세요.</p></div>
     </section>
-    <section class="fs" aria-labelledby="fs2"><h2 id="fs2">지금 하는 일</h2>
+    <section class="fs" aria-labelledby="fs2"><h2 id="fs2">지금 하는 일과 경력</h2>
       <div class="g2">
         ${inp('org', '회사·소속', 'text', 'maxlength="40"')}
         ${inp('title', '직무·직책', 'text', 'maxlength="40"')}
       </div>
       ${grp('industry', '업종', IND, 1, true)}
       ${grp('fn', '직무 분야', FN, 1, true)}
+      ${grp('years', '총 경력 연차', YEARS, 1, true)}
+      <div class="field"><span class="label" id="lb-career">주요 경력 <small>선택 · 최대 ${MAX_CAREER}줄</small></span>
+        <p class="mini">‘회사 · 직무 · 기간’ 순서로 적으면 같은 회사를 거친 동문을 찾아 드려요. 예: CJ제일제당 · 브랜드매니저 · 2015–2020</p>
+        <div class="career-in" role="group" aria-labelledby="lb-career">${[0, 1, 2].slice(0, MAX_CAREER).map(i => `<input id="f-career${i}" data-key="career${i}" type="text" maxlength="${CAREER_LEN}" value="${esc(f['career' + i])}" aria-label="주요 경력 ${i + 1}">`).join('')}</div>
+      </div>
     </section>
     <section class="fs" aria-labelledby="fs3"><h2 id="fs3">동문과 주고받을 것</h2>
       <p class="hint">두 항목은 같은 목록에서 고릅니다. 내가 필요한 것을 다른 동문이 줄 수 있으면 네트워크 지도에 선이 생깁니다.</p>
@@ -230,10 +245,14 @@ V.dir = () => {
   return `<div class="wrap">
   <header class="page-head"><p class="eyebrow-k">동문 명부</p><h1>누가 어디서 무슨 일을 하고 있을까요</h1></header>
   <div class="toolbar">
-    <label><span class="sr-only">동문 검색</span><input id="dir-q" type="search" placeholder="이름, 회사, 직책, 기수로 찾기" value="${esc(f.q)}"></label>
+    <label><span class="sr-only">동문 검색</span><input id="dir-q" type="search" placeholder="이름, 회사, 경력, 논문 주제, 기수로 찾기" value="${esc(f.q)}"></label>
     <div class="filters" role="group" aria-label="업종으로 거르기">
-      <button class="pick" data-act="ind" data-val="all" aria-pressed="${f.ind === 'all'}">전체</button>
+      <button class="pick" data-act="ind" data-val="all" aria-pressed="${f.ind === 'all'}">전체 업종</button>
       ${Object.entries(IND).map(([k, v]) => `<button class="pick" data-act="ind" data-val="${k}" aria-pressed="${f.ind === k}">${esc(v)}</button>`).join('')}
+    </div>
+    <div class="filters" role="group" aria-label="졸업생·재학생으로 거르기">
+      <button class="pick" data-act="dtype" data-val="all" aria-pressed="${f.type === 'all'}">졸업생·재학생 모두</button>
+      ${Object.entries(TYPES).map(([k, v]) => `<button class="pick" data-act="dtype" data-val="${k}" aria-pressed="${f.type === k}">${esc(v)}</button>`).join('')}
     </div>
     <label class="toggle"><input type="checkbox" id="dir-help" ${f.helpMe ? 'checked' : ''}>나에게 도움 줄 수 있는 동문만 보기</label>
   </div>
@@ -243,10 +262,12 @@ V.dir = () => {
 };
 function dirCard(u) {
   const self = u.uid === S.mid, h = self ? [] : helps(u, S.member);
+  const cr = careerList(u);
   return `<button class="dcard" data-act="profile" data-id="${u.uid}">
-    <span class="dtop"><span>${esc(IND[u.industry] || '')}</span><span class="coh">${u.cohort}기</span></span>
+    <span class="dtop"><span>${esc(IND[u.industry] || '')}${yearsLabel(u) ? ' · ' + esc(yearsLabel(u)) : ''}</span><span class="coh">${esc(cohortLabel(u))}</span></span>
     <span class="dname">${esc(u.name)}${self ? '<span class="me-tag">나</span>' : ''}</span>
     <span class="drole">${esc(u.org)} · ${esc(u.title)}</span>
+    ${cr.length ? `<span class="dcareer"><i>경력</i>${esc(cr[0])}${cr.length > 1 ? ` <small>외 ${cr.length - 1}</small>` : ''}</span>` : ''}
     <span class="mini">줄 수 있는 것</span>
     ${tags(u.offer)}
     ${h.length ? `<span class="dmatch">내게 필요한 ${esc(HELP[h[0]])} 도움 가능</span>` : ''}
@@ -257,16 +278,65 @@ function renderDirList() {
   const f = S.filter, q = f.q.trim().toLowerCase();
   const L = S.members.filter(u => {
     if (f.ind !== 'all' && u.industry !== f.ind) return false;
+    if (f.type !== 'all' && (u.type || 'grad') !== f.type) return false;
     if (f.helpMe && (u.uid === S.mid || !helps(u, S.member).length)) return false;
     if (q) {
-      const hay = [u.name, u.org, u.title, IND[u.industry], FN[u.fn], u.cohort + '기', u.intro, ...labels(u.offer), ...labels(u.need)].join(' ').toLowerCase();
+      const hay = [u.name, u.org, u.title, IND[u.industry], FN[u.fn], u.cohort + '기', TYPES[u.type], YEARS[u.years], u.thesis, ...careerList(u), u.intro, ...labels(u.offer), ...labels(u.need)].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
   }).sort((a, b) => a.cohort - b.cohort || a.name.localeCompare(b.name, 'ko'));
   $('#dir-count').textContent = `동문 ${S.members.length}명 중 ${L.length}명`;
-  box.innerHTML = L.length ? L.map(dirCard).join('') : '<p class="empty">조건에 맞는 동문이 없습니다. 검색어나 업종을 바꿔 보세요.</p>';
+  box.innerHTML = L.length ? L.map(dirCard).join('') : '<p class="empty">조건에 맞는 동문이 없습니다. 검색어나 업종, 구분을 바꿔 보세요.</p>';
 }
+
+/* ---------- 시너지 추천 · 동종업계 ---------- */
+V.match = () => {
+  const me = S.member, others = S.members.filter(o => o.uid !== S.mid);
+  const recs = recommend(me, S.members, 9);
+  const thin = !careerList(me).length || !me.thesis;
+  const rc = x => `<article class="rcard">
+    <button class="rc-main" data-act="profile" data-id="${x.u.uid}">
+      <span class="dtop"><span>${esc(IND[x.u.industry] || '')} · ${esc(FN[x.u.fn] || '')}</span><span class="coh">${esc(cohortLabel(x.u))}</span></span>
+      <span class="dname">${esc(x.u.name)}</span>
+      <span class="drole">${esc(x.u.org)} · ${esc(x.u.title)}</span>
+    </button>
+    ${whyList(x.reasons.slice(0, 4))}
+    <div class="rc-cta">${introCTA(x.u, true)}</div>
+  </article>`;
+  // 업종별 동문 수(나 포함)
+  const cnt = Object.keys(IND).map(k => [k, S.members.filter(u => u.industry === k).length]).filter(c => c[1]);
+  const mx = Math.max(1, ...cnt.map(c => c[1]));
+  const peers = others.filter(o => o.industry === me.industry)
+    .sort((a, b) => (a.fn === me.fn ? 0 : 1) - (b.fn === me.fn ? 0 : 1) || a.cohort - b.cohort);
+  const groups = companyGroups(S.members).slice(0, 12);
+  const chip = u => `<button class="pchip" data-act="profile" data-id="${u.uid}">${esc(u.name)}<small>${esc(cohortLabel(u))}${u.fn === me.fn && u.industry === me.industry ? ' · 같은 직무' : ''}</small></button>`;
+  return `<div class="wrap">
+  <header class="page-head"><p class="eyebrow-k">시너지 추천</p><h1>나와 시너지가 날 동문</h1>
+  <p class="sub">내가 필요한 것과 줄 수 있는 것, 거쳐 온 회사, 업종과 직무, 논문 주제를 맞춰 골랐어요.</p></header>
+  ${thin ? `<p class="nudge">주요 경력${me.thesis ? '' : '과 학위논문 제목'}을 채우면 같은 회사를 거친 동문${me.thesis ? '' : ', 논문 주제가 비슷한 동문'}까지 찾아 드려요. <button class="linklike" data-act="edit-profile">프로필 채우기</button></p>` : ''}
+  <section class="msec" aria-labelledby="m1">
+    <div class="sec-head"><h2 id="m1">추천 동문</h2><span class="muted">${recs.length}명</span></div>
+    ${recs.length ? `<div class="rec-grid">${recs.map(rc).join('')}</div>`
+      : `<p class="empty">${others.length ? '아직 겹치는 동문이 없어요. ‘필요한 것’과 ‘줄 수 있는 것’을 넓히거나 경력을 채워 보세요.' : '아직 명부에 다른 동문이 없어요. 동문이 늘어나면 여기에 추천이 생깁니다.'}</p>`}
+  </section>
+  <div class="two">
+    <section class="card msec-card" aria-labelledby="m2">
+      <h2 id="m2">동종업계 네트워크</h2>
+      <p class="hint">업종을 누르면 명부에서 그 업종 동문만 볼 수 있어요.</p>
+      <div class="ind-bars">${cnt.length ? cnt.map(([k, c]) => `<button class="drow ib${k === me.industry ? ' mine' : ''}" data-act="dir-ind" data-val="${k}"><span>${esc(IND[k])}${k === me.industry ? ' <em>내 업종</em>' : ''}</span><span class="dbar"><i style="width:${(c / mx * 100).toFixed(1)}%"></i></span><b>${c}</b></button>`).join('') : '<p class="hint">아직 동문이 없습니다.</p>'}</div>
+      <h3 class="m-h3">${esc(IND[me.industry] || '')} 동문 <span class="muted">${peers.length}명</span></h3>
+      <div class="pchips">${peers.length ? peers.slice(0, 24).map(chip).join('') + (peers.length > 24 ? `<button class="linklike" data-act="dir-ind" data-val="${me.industry}">${peers.length - 24}명 더 보기</button>` : '') : '<span class="muted">아직 같은 업종 동문이 없어요.</span>'}</div>
+    </section>
+    <section class="card msec-card" aria-labelledby="m3">
+      <h2 id="m3">같은 회사를 거친 동문</h2>
+      <p class="hint">현재 소속과 주요 경력에 적힌 회사가 같은 동문끼리 묶었어요.</p>
+      ${groups.length ? `<div class="co-list">${groups.map(g => `<div class="co-row${g.people.some(p => p.uid === S.mid) ? ' mine' : ''}"><b>${esc(g.name)}</b><span class="muted">${g.people.length}명</span><div class="pchips">${g.people.map(p => p.uid === S.mid ? `<span class="pchip me">나</span>` : chip(p)).join('')}</div></div>`).join('')}</div>`
+        : '<p class="empty">아직 같은 회사를 거친 동문 묶음이 없어요. 동문들이 주요 경력을 채우면 생깁니다.</p>'}
+    </section>
+  </div>
+</div>`;
+};
 
 V.intros = () => {
   const by = (a, b) => ms(b.createdAt) - ms(a.createdAt);
@@ -303,12 +373,16 @@ V.me = () => {
   <div class="me-grid">
     <div class="mcard" role="img" aria-label="${esc(u.name)} 동문증, ${u.cohort}기, ${esc(IND[u.industry] || '')}, 회원번호 ${no}">
       <div class="mc-top">${seal(52, true)}<p class="mc-eyebrow">BRAND MBA<br>ALUMNI</p></div>
-      <div><p class="mc-name">${esc(u.name)}</p><p class="mc-meta">${u.cohort}기 · ${esc(IND[u.industry] || '')}</p><p class="mc-no">${no}</p></div>
+      <div><p class="mc-name">${esc(u.name)}</p><p class="mc-meta">${esc(cohortLabel(u))} · ${esc(IND[u.industry] || '')}</p><p class="mc-no">${no}</p></div>
     </div>
     <section class="card me-body" aria-label="프로필 정보">
       <dl class="kv">
+        <dt>구분</dt><dd>${esc(TYPES[u.type] || '')}</dd>
         <dt>회사·직책</dt><dd>${esc(u.org)} · ${esc(u.title)}</dd>
         <dt>업종 · 직무</dt><dd>${esc(IND[u.industry] || '')} · ${esc(FN[u.fn] || '')}</dd>
+        <dt>경력 연차</dt><dd>${esc(YEARS[u.years] || '')}</dd>
+        <dt>주요 경력</dt><dd>${careerHTML(u)}</dd>
+        <dt>학위논문</dt><dd>${u.thesis ? esc(u.thesis) : '<span class="muted">비어 있음</span>'}</dd>
         <dt>줄 수 있는 것</dt><dd>${tags(u.offer)}</dd>
         <dt>필요한 것</dt><dd>${tags(u.need)}</dd>
         <dt>한 줄 소개</dt><dd>${u.intro ? esc(u.intro) : '<span class="muted">비어 있음</span>'}</dd>
@@ -317,7 +391,7 @@ V.me = () => {
       <div class="row-btns"><button class="btn btn-ghost" data-act="edit-profile">프로필 고치기</button><button class="btn btn-ghost" data-act="logout">로그아웃</button></div>
     </section>
   </div>
-  <section class="card me-links"><p><b>${inn}명</b>이 내가 필요한 것을 줄 수 있고, 나는 <b>${out}명</b>에게 도움을 줄 수 있습니다.</p><a class="btn btn-primary" href="#/net" data-act="center-me">지도에서 보기</a></section>
+  <section class="card me-links"><p><b>${inn}명</b>이 내가 필요한 것을 줄 수 있고, 나는 <b>${out}명</b>에게 도움을 줄 수 있습니다.</p><div class="row-btns"><a class="btn btn-primary" href="#/match">시너지 추천 보기</a><a class="btn btn-ghost" href="#/net" data-act="center-me">지도에서 보기</a></div></section>
   <section class="danger"><h2>탈퇴</h2><p class="hint">탈퇴하면 프로필, 연락처, 주고받은 소개 요청이 바로 삭제되고 되돌릴 수 없습니다. 운영진이 신청서 응답도 지웁니다.</p><button class="btn btn-danger-ghost" data-act="withdraw">라운지 탈퇴하기</button></section>
 </div>`;
 };
@@ -336,8 +410,14 @@ V.admin = () => {
     <div class="card tile"><span>탈퇴 기록</span><b>${S.withdrawn.size}<small>건</small></b></div>
   </div>
 
+  <section class="card auto" aria-labelledby="aa">
+    <h2 id="aa">자동 연동</h2>
+    <p>신청서 응답 시트에서 <b>승인</b>을 체크하면 바로 명부에 올라가고, 옆 <b>라운지 반영</b> 칸에 결과가 적힙니다. 놓친 줄은 매일 아침 한 번 더 확인합니다.</p>
+    <p class="hint">동문이 신청서를 고쳤다면 그 줄의 ‘라운지 반영’ 칸을 지우세요. 새 내용으로 다시 반영됩니다. 명부에서 내리기는 아래 동문 목록에서 합니다.</p>
+  </section>
+
   <section class="card imp" aria-labelledby="ai">
-    <div class="sec-head"><h2 id="ai">신청서 가져오기</h2></div>
+    <div class="sec-head"><h2 id="ai">신청서 직접 가져오기</h2><span class="muted">자동 연동이 멈췄을 때 쓰는 예비 방법</span></div>
     <ol class="howto">
       <li>신청서 응답 구글 시트에서 등록할 사람의 <b>승인</b> 칸을 체크합니다.</li>
       <li>시트 전체를 선택해 복사(머리글 행 포함)한 뒤 아래 칸에 붙여넣거나, <b>파일 → 다운로드 → 쉼표로 구분된 값(.csv)</b>으로 받은 파일을 올립니다.</li>
@@ -382,7 +462,7 @@ function renderAdminList() {
   box.innerHTML = L.length ? L.slice(0, 300).map(u => {
     const c = S.allContacts[u.uid] || {};
     return `<div class="arow">
-      <div class="a-who"><b>${esc(u.name)}</b><span>${u.cohort}기</span>${u.status === 'hidden' ? ' <span class="badge warn">내림</span>' : ''}<small>${esc(c.email || '')}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
+      <div class="a-who"><b>${esc(u.name)}</b><span>${esc(cohortLabel(u))}</span>${u.status === 'hidden' ? ' <span class="badge warn">내림</span>' : ''}<small>${esc(c.email || '')}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
       <div class="a-job">${esc(u.org)} · ${esc(u.title)}</div>
       <div class="a-ind">${esc(IND[u.industry] || '')}</div>
       <div class="a-date">${u.status === 'hidden' ? '' : '등록 ' + when(u.createdAt)}</div>
@@ -424,7 +504,7 @@ async function buildImport(text, opts) {
   const head = table[0].map(h => String(h).trim());
   const idx = {};
   Object.entries(COL).forEach(([k, title]) => { const i = head.findIndex(h => squash(h) === squash(title)); if (i >= 0) idx[k] = i; });
-  const required = ['name', 'cohort', 'email', 'org', 'title', 'industry', 'fn'];
+  const required = ['name', 'type', 'cohort', 'email', 'org', 'title', 'industry', 'fn', 'years'];
   const missing = required.filter(k => idx[k] == null).map(k => COL[k]);
   if (missing.length) return { fatal: `시트에서 이 열을 찾지 못했습니다: ${missing.join(', ')}. 질문 제목이 바뀌었는지 확인해 주세요.` };
   const hasApprove = idx.approve != null;
@@ -450,6 +530,11 @@ async function buildImport(text, opts) {
     const industry = keyOf(IND, cell(r, 'industry')), fn = keyOf(FN, cell(r, 'fn'));
     if (!industry) errs.push(`업종 ‘${cell(r, 'industry')}’ 확인 필요`);
     if (!fn) errs.push(`직무 분야 ‘${cell(r, 'fn')}’ 확인 필요`);
+    const type = keyOf(TYPES, cell(r, 'type')), years = keyOf(YEARS, cell(r, 'years'));
+    if (!type) errs.push(`구분 ‘${cell(r, 'type')}’ 확인 필요`);
+    if (!years) errs.push(`총 경력 연차 ‘${cell(r, 'years')}’ 확인 필요`);
+    const career = cell(r, 'career').split(/\r?\n/).map(s => s.trim().slice(0, CAREER_LEN)).filter(Boolean).slice(0, MAX_CAREER);
+    const thesis = cell(r, 'thesis').slice(0, THESIS_LEN);
     const offer = multi(r, 'offer', errs), need = multi(r, 'need', errs);
     if (idx.agreeMap != null && !cell(r, 'agreeMap').includes(AGREE)) errs.push('명부 공개 동의 없음');
     if (idx.agreePriv != null && !cell(r, 'agreePriv').includes(AGREE)) errs.push('개인정보 동의 없음');
@@ -458,7 +543,7 @@ async function buildImport(text, opts) {
     const share = squash(cell(r, 'share')) === squash(SHARE_YES);
     const intro = cell(r, 'intro').slice(0, 60);
     rows.push({ line: n + 1, name, cohort, email, approved: hasApprove ? truthy(cell(r, 'approve')) : true, errs,
-      profile: { name, cohort, industry, fn, org, title, offer, need, intro }, contact: { email, phone, share } });
+      profile: { name, type, cohort, industry, fn, org, title, years, career, thesis, offer, need, intro }, contact: { email, phone, share } });
   }
   await Promise.all(rows.map(async r => { r.mid = r.errs.length && !r.email.includes('@') ? null : await api.memberId(r.email); }));
   // 같은 이메일이 여러 번이면 마지막 응답을 씀
@@ -506,31 +591,36 @@ function impHTML(imp) {
 function introWith(id) {
   return { s: S.intros.sent.find(i => i.to === id), r: S.intros.received.find(i => i.from === id) };
 }
+// 소개 요청 버튼 자리: 연결 상태에 따라 버튼 또는 상태 표시
+function introCTA(u, small) {
+  if (u.uid === S.mid) return '';
+  const { s, r } = introWith(u.uid), sm = small ? ' btn-sm' : '';
+  if ((s && s.status === 'accepted') || (r && r.status === 'accepted')) return '<span class="badge ok">연결됨</span>';
+  if (s && s.status === 'pending') return '<span class="badge warn">소개 요청 보냄 · 답 기다리는 중</span>';
+  if (r && r.status === 'pending') return `<a class="btn btn-primary${sm}" href="#/intros" data-act="close">받은 요청 확인하기</a>`;
+  if (!s) return `<button class="btn btn-primary${sm}" data-act="intro" data-id="${u.uid}">소개 요청하기</button>`;
+  return '';
+}
+const whyList = reasons => `<ul class="why">${reasons.map(x => `<li class="w-${x.k}">${esc(x.t)}</li>`).join('')}</ul>`;
 function profileHTML(u) {
-  const self = u.uid === S.mid, h = self ? [] : helps(u, S.member), g = self ? [] : helps(S.member, u);
-  const { s, r } = introWith(u.uid);
-  const linked = (s && s.status === 'accepted') || (r && r.status === 'accepted');
-  let cta = '';
-  if (!self) {
-    if (linked) cta = '<span class="badge ok">연결됨</span>';
-    else if (s && s.status === 'pending') cta = '<span class="badge warn">소개 요청 보냄 · 답 기다리는 중</span>';
-    else if (r && r.status === 'pending') cta = `<a class="btn btn-primary" href="#/intros" data-act="close">받은 요청 확인하기</a>`;
-    else if (!s) cta = `<button class="btn btn-primary" data-act="intro" data-id="${u.uid}">소개 요청하기</button>`;
-  }
+  const self = u.uid === S.mid;
+  const syn = self ? null : synergy(S.member, u);
   return `<div class="pm-head">
-    <p class="dtop"><span>${esc(IND[u.industry] || '')} · ${esc(FN[u.fn] || '')}</span><span class="coh">${u.cohort}기</span></p>
+    <p class="dtop"><span>${esc(IND[u.industry] || '')} · ${esc(FN[u.fn] || '')}</span><span class="coh">${esc(cohortLabel(u))}</span></p>
     <h2>${esc(u.name)}${self ? '<span class="me-tag">나</span>' : ''}</h2>
-    <p class="drole">${esc(u.org)} · ${esc(u.title)}</p>
+    <p class="drole">${esc(u.org)} · ${esc(u.title)}${yearsLabel(u) ? ` · ${esc(yearsLabel(u))}` : ''}</p>
   </div>
   ${u.intro ? `<p class="intro">${esc(u.intro)}</p>` : ''}
-  <dl class="kv"><dt>줄 수 있는 것</dt><dd>${tags(u.offer)}</dd><dt>필요한 것</dt><dd>${tags(u.need)}</dd></dl>
-  ${self ? '' : `<div class="rel">
-    ${h.length ? `<p>이 동문은 내가 필요한 <b>${esc(labels(h).join(', '))}</b> 쪽으로 도움을 줄 수 있습니다.</p>` : ''}
-    ${g.length ? `<p>나는 이 동문이 필요한 <b>${esc(labels(g).join(', '))}</b> 쪽으로 도움을 줄 수 있습니다.</p>` : ''}
-    ${!h.length && !g.length ? '<p>아직 서로 겹치는 항목은 없습니다. 같은 업종이나 기수로 먼저 인사해 보세요.</p>' : ''}
+  <dl class="kv">
+    <dt>주요 경력</dt><dd>${careerHTML(u)}</dd>
+    ${u.thesis ? `<dt>학위논문</dt><dd>${esc(u.thesis)}</dd>` : ''}
+    <dt>줄 수 있는 것</dt><dd>${tags(u.offer)}</dd><dt>필요한 것</dt><dd>${tags(u.need)}</dd>
+  </dl>
+  ${self ? '' : `<div class="rel"><p class="rel-h">나와의 시너지</p>
+    ${syn.reasons.length ? whyList(syn.reasons) : '<p>아직 겹치는 점은 없습니다. 같은 기수나 관심사로 먼저 인사해 보세요.</p>'}
   </div>`}
   <div class="contact" data-contact="${u.uid}"><span class="muted">연락처 확인 중</span></div>
-  <div class="row-btns"><a class="btn btn-ghost" href="#/net" data-act="map-of" data-id="${u.uid}">지도에서 보기</a>${cta}</div>`;
+  <div class="row-btns"><a class="btn btn-ghost" href="#/net" data-act="map-of" data-id="${u.uid}">지도에서 보기</a>${introCTA(u)}</div>`;
 }
 // 운영진은 규칙상 모든 연락처를 읽을 수 있지만, 일반 화면에서는 동문과 같은 기준으로만 보여줍니다.
 function contactVisible(id, c) {
@@ -560,7 +650,13 @@ function openIntro(id) {
   const u = S.members.find(x => x.uid === id);
   if (!u || id === S.mid) return;
   const me = S.member, h = helps(u, me), g = helps(me, u);
-  const why = h.length ? `${HELP[h[0]]} 쪽으로 조언을 듣고 싶어서 연락드립니다.` : g.length ? `${HELP[g[0]]} 쪽으로 도움을 드릴 수 있을 것 같아 연락드립니다.` : '라운지에서 프로필을 보고 인사드리고 싶어 연락드립니다.';
+  const R = synergy(me, u).reasons, has = k => R.find(x => x.k === k);
+  const why = h.length ? `${HELP[h[0]]} 쪽으로 조언을 듣고 싶어서 연락드립니다.`
+    : g.length ? `${HELP[g[0]]} 쪽으로 도움을 드릴 수 있을 것 같아 연락드립니다.`
+    : has('co') ? `${has('co').t.replace('같은 회사 출신 · ', '')}을(를) 거친 인연이 반가워 연락드립니다.`
+    : has('ind') ? `같은 ${IND[u.industry]} 업계에 계셔서 인사드리고 싶어 연락드립니다.`
+    : has('thesis') ? '논문 주제가 비슷해서 이야기 나눠 보고 싶어 연락드립니다.'
+    : '라운지에서 프로필을 보고 인사드리고 싶어 연락드립니다.';
   const msg = `안녕하세요, ${me.cohort}기 ${me.name}입니다. ${why} 편하실 때 짧게 통화나 커피 한잔 가능할까요?`;
   openModal(`<div class="pm-head"><h2>${esc(u.name)} 동문에게 소개 요청</h2></div>
     <p class="hint">상대가 수락하면 두 사람의 연락처가 서로에게 공개됩니다. 상대는 다음에 라운지에 들어올 때 요청을 보게 됩니다.</p>
@@ -578,8 +674,8 @@ function openWithdraw() {
 }
 
 /* ---------- 상단 바와 이동 ---------- */
-const NAV = [['net', '네트워크 지도'], ['dir', '동문 명부'], ['intros', '소개 요청'], ['me', '내 프로필']];
-const APPROVED_VIEWS = ['net', 'dir', 'intros', 'me', 'admin'];
+const NAV = [['net', '네트워크 지도'], ['match', '시너지 추천'], ['dir', '동문 명부'], ['intros', '소개 요청'], ['me', '내 프로필']];
+const APPROVED_VIEWS = ['net', 'match', 'dir', 'intros', 'me', 'admin'];
 const approved = () => !!(S.member && S.member.status === 'approved');
 function renderBar() {
   const bar = $('#bar');
@@ -592,7 +688,7 @@ function renderBar() {
   bar.innerHTML = `<div class="wrap wide bar-in">
     <a class="brand" href="${ok ? '#/net' : '#'}" aria-label="라운지 처음 화면">${seal(36)}<span><b>BM 동문 라운지</b><small>경희대학교 경영대학원 브랜드매니지먼트전공</small></span></a>
     <nav class="nav" aria-label="라운지 메뉴">${items.map(([k, l]) => `<a href="#/${k}"${cur === k ? ' aria-current="page"' : ''}>${l}${k === 'intros' && newReq ? `<span class="dot-n" aria-label="새 요청 ${newReq}건">${newReq}</span>` : ''}</a>`).join('')}</nav>
-    <div class="who">${S.member ? `<span class="who-name">${esc(S.member.name)} <span>${S.member.cohort}기</span></span>` : `<span class="who-name">${esc(S.user.email)}</span>`}<button class="btn btn-ghost btn-sm" data-act="logout">로그아웃</button></div>
+    <div class="who">${S.member ? `<span class="who-name">${esc(S.member.name)} <span>${esc(cohortLabel(S.member))}</span></span>` : `<span class="who-name">${esc(S.user.email)}</span>`}<button class="btn btn-ghost btn-sm" data-act="logout">로그아웃</button></div>
   </div>`;
 }
 const hashView = () => { const h = location.hash.replace(/^#\/?/, ''); return APPROVED_VIEWS.includes(h) ? h : 'net'; };
@@ -644,7 +740,9 @@ async function fillMyContact() {
 
 /* ---------- 로그인 상태에 따라 길 안내 ---------- */
 function formFromMember(m, c) {
-  return { name: m.name, cohort: String(m.cohort), org: m.org, title: m.title, industry: m.industry, fn: m.fn,
+  const cr = careerList(m);
+  return { name: m.name, type: m.type || 'grad', cohort: String(m.cohort), thesis: m.thesis || '', org: m.org, title: m.title, industry: m.industry, fn: m.fn,
+    years: m.years || '', career0: cr[0] || '', career1: cr[1] || '', career2: cr[2] || '',
     offer: (m.offer || []).slice(), need: (m.need || []).slice(), intro: m.intro || '', phone: (c && c.phone) || '', share: !!(c && c.share) };
 }
 
@@ -712,8 +810,10 @@ async function submitProfile() {
   if (!f.title.trim()) E.title = '직무나 직책을 적어 주세요.';
   if (!f.industry) E.industry = '업종을 하나 골라 주세요.';
   if (!f.fn) E.fn = '직무 분야를 하나 골라 주세요.';
+  if (!TYPES[f.type]) E.type = '졸업생인지 재학생인지 골라 주세요.';
+  if (!YEARS[f.years]) E.years = '총 경력 연차를 골라 주세요.';
   if (f.phone.trim() && !/^[0-9+\-\s()]{7,20}$/.test(f.phone.trim())) E.phone = '숫자와 하이픈으로 적어 주세요.';
-  ['name', 'cohort', 'org', 'title', 'industry', 'fn', 'phone'].forEach(k => {
+  ['name', 'cohort', 'type', 'org', 'title', 'industry', 'fn', 'years', 'phone'].forEach(k => {
     setErr(k, E[k] || '');
     const t = document.querySelector(`#pf [data-key="${k}"]`); if (t) t.setAttribute('aria-invalid', E[k] ? 'true' : 'false');
   });
@@ -721,7 +821,10 @@ async function submitProfile() {
   $('#err-sum').textContent = n ? `${n}개 항목을 확인해 주세요.` : '';
   if (n) { const first = document.querySelector('#pf [aria-invalid="true"]'); if (first) { first.focus(); first.scrollIntoView({ block: 'center' }); } return; }
 
-  const profile = { name: f.name.trim(), cohort: c, industry: f.industry, fn: f.fn, org: f.org.trim(), title: f.title.trim(), offer: f.offer.slice(), need: f.need.slice(), intro: f.intro.trim() };
+  const career = [f.career0, f.career1, f.career2].map(s => String(s || '').trim().slice(0, CAREER_LEN)).filter(Boolean).slice(0, MAX_CAREER);
+  const profile = { name: f.name.trim(), type: f.type, cohort: c, industry: f.industry, fn: f.fn, org: f.org.trim(), title: f.title.trim(),
+    years: f.years, career, thesis: String(f.thesis || '').trim().slice(0, THESIS_LEN),
+    offer: f.offer.slice(), need: f.need.slice(), intro: f.intro.trim() };
   const btn = $('#pf-submit');
   busy(btn, true, '저장하는 중…');
   try {
@@ -741,10 +844,11 @@ async function submitProfile() {
 /* ---------- 백업 ---------- */
 function downloadCSV() {
   const cell = v => { let s = String(v ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
-  const head = ['이름', '기수', '상태', '업종', '직무 분야', '회사·소속', '직무·직책', '줄 수 있는 것', '필요한 것', '한 줄 소개', '로그인 이메일', '휴대폰', '연락처 공개', '동의 버전', '등록일'];
+  const head = ['이름', '구분', '기수', '상태', '업종', '직무 분야', '회사·소속', '직무·직책', '총 경력 연차', '주요 경력', '학위논문 제목', '줄 수 있는 것', '필요한 것', '한 줄 소개', '로그인 이메일', '휴대폰', '연락처 공개', '동의 버전', '등록일'];
   const st = { approved: '명부', hidden: '내림' };
   const d = ts => (ts && ts.toDate ? ts.toDate().toISOString().slice(0, 10) : '');
-  const lines = S.all.slice().sort((a, b) => a.cohort - b.cohort).map(r => { const c = S.allContacts[r.uid] || {}; return [r.name, r.cohort, st[r.status] || r.status, IND[r.industry], FN[r.fn], r.org, r.title,
+  const lines = S.all.slice().sort((a, b) => a.cohort - b.cohort).map(r => { const c = S.allContacts[r.uid] || {}; return [r.name, TYPES[r.type] || '', r.cohort, st[r.status] || r.status, IND[r.industry], FN[r.fn], r.org, r.title,
+    YEARS[r.years] || '', careerList(r).join(' / '), r.thesis || '',
     labels(r.offer).join(', '), labels(r.need).join(', '), r.intro, c.email, c.phone, c.share ? '공개' : '비공개', c.consent ? c.consent.version : '', d(r.createdAt)].map(cell).join(','); });
   const blob = new Blob(['﻿' + [head.map(cell).join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
@@ -791,6 +895,15 @@ document.addEventListener('click', async e => {
         document.querySelectorAll('[data-act="ind"]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
         renderDirList();
         break;
+      case 'dtype':
+        S.filter.type = b.dataset.val;
+        document.querySelectorAll('[data-act="dtype"]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        renderDirList();
+        break;
+      case 'dir-ind': // 추천 화면에서 업종을 누르면 명부를 그 업종으로 걸러서 보여줌
+        Object.assign(S.filter, { ind: b.dataset.val, type: 'all', q: '', helpMe: false });
+        nav('dir');
+        break;
       case 'profile': openProfile(id); break;
       case 'intro': openIntro(id); break;
       case 'send-intro': {
@@ -803,6 +916,7 @@ document.addEventListener('click', async e => {
         S.intros.sent.push({ id: api.introId(S.mid, id), from: S.mid, to: id, message: msg, status: 'pending', createdAt: null });
         const u = S.members.find(x => x.uid === id);
         closeModal();
+        if (S.view === 'match') show('match');
         toast(`${u ? u.name : ''} 동문에게 소개 요청을 보냈습니다. 상대가 수락하면 연락처가 서로 공개됩니다.`);
         break;
       }

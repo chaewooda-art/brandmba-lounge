@@ -357,4 +357,56 @@ input:focus,textarea:focus{border-color:var(--crimson);outline:none;box-shadow:0
 .nv-bar b{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
 .nv-note{display:flex;gap:9px;align-items:center;font-size:.78rem;color:var(--st-muted);border-top:1px solid var(--st-line);padding-top:14px}
 
+a.nv-btn{text-decoration:none;display:inline-flex;align-items:center}
+
+/* ---------- 경력·논문 ---------- */
+.career{list-style:none;padding:0;display:grid;gap:2px}
+.career li{padding-left:14px;position:relative}
+.career li::before{content:"";position:absolute;left:2px;top:.72em;width:5px;height:5px;border-radius:50%;background:var(--crimson)}
+.career-in{display:grid;gap:8px}
+.dcareer{font-size:.8rem;color:var(--muted);display:flex;gap:6px;align-items:baseline;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dcareer i{font-style:normal;font-size:.7rem;font-weight:600;color:var(--ink);background:var(--sunk);padding:0 7px;border-radius:999px;flex:none}
+.dcareer small{flex:none}
+
+/* ---------- 시너지 추천 ---------- */
+.nudge{background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:12px 16px;font-size:.88rem;margin-bottom:18px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.nudge .linklike{color:var(--warn);font-weight:600}
+.msec{display:grid;gap:12px;margin-bottom:22px}
+.rec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.rcard{display:grid;grid-template-rows:auto 1fr auto;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;transition:border-color .15s}
+.rcard:hover{border-color:var(--crimson)}
+.rc-main{display:grid;gap:4px;text-align:left;border:0;background:none;padding:0;color:var(--ink)}
+.rc-cta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.why{list-style:none;padding:0;display:grid;gap:5px;align-content:start}
+.why li{font-size:.82rem;line-height:1.45;padding:5px 10px 5px 26px;border-radius:8px;background:var(--sunk);position:relative}
+.why li::before{position:absolute;left:9px;top:5px;font-weight:700;font-size:.8rem}
+.why .w-get{background:var(--crimson-soft)}
+.why .w-get::before{content:"←";color:var(--crimson)}
+.why .w-give{background:var(--crimson-soft)}
+.why .w-give::before{content:"→";color:var(--crimson)}
+.why .w-co::before{content:"◆";color:var(--warn);font-size:.66rem;top:7px}
+.why .w-ind::before,.why .w-fn::before{content:"●";color:var(--muted);font-size:.6rem;top:8px}
+.why .w-thesis::before{content:"✎";color:var(--ok)}
+.why .w-senior::before,.why .w-junior::before{content:"↕";color:var(--ok)}
+.rel .why li{background:var(--surface)}
+.rel-h{font-weight:600;font-size:.84rem;color:var(--crimson)}
+.msec-card{padding:18px;display:grid;gap:12px;align-content:start}
+.m-h3{font-size:.92rem;font-weight:600;display:flex;gap:6px;align-items:baseline;margin-top:4px}
+.ind-bars{display:grid;gap:4px}
+.drow.ib{border:0;background:none;padding:6px 8px;margin:0 -8px;border-radius:8px;text-align:left;color:var(--ink)}
+.drow.ib:hover{background:var(--sunk)}
+.drow.ib.mine span:first-child{font-weight:600}
+.drow.ib em{font-style:normal;font-size:.7rem;color:var(--crimson);margin-left:4px}
+.pchips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pchip{display:inline-flex;align-items:baseline;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px;font-size:.84rem;color:var(--ink)}
+button.pchip:hover{border-color:var(--crimson)}
+.pchip small{color:var(--muted);font-size:.72rem}
+.pchip.me{background:var(--crimson);border-color:var(--crimson);color:var(--crimson-ink);font-weight:600}
+.co-list{display:grid;gap:12px}
+.co-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.co-row:last-child{border-bottom:0;padding-bottom:0}
+.co-row .pchips{grid-column:1/-1}
+.co-row.mine b{color:var(--crimson)}
+.auto{padding:18px;display:grid;gap:8px;margin-bottom:16px;border-left:3px solid var(--ok)}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

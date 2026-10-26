@@ -79,7 +79,7 @@ export function watchMember(mid, cb, onError) {
   }, onError);
 }
 
-const PROFILE_KEYS = ['name', 'cohort', 'industry', 'fn', 'org', 'title', 'offer', 'need', 'intro'];
+const PROFILE_KEYS = ['name', 'type', 'cohort', 'industry', 'fn', 'org', 'title', 'years', 'career', 'thesis', 'offer', 'need', 'intro'];
 const pickProfile = p => Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k]]));
 
 export async function saveProfile(mid, profile, contact) {

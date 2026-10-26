@@ -42,18 +42,38 @@ export const HELPS = {
   partner: '공동 프로젝트·제휴'
 };
 
+export const TYPES = {
+  grad: '졸업생',
+  student: '재학생'
+};
+
+export const YEARS = {
+  y0: '3년 이하',
+  y4: '4~7년',
+  y8: '8~12년',
+  y13: '13~19년',
+  y20: '20년 이상'
+};
+
 export const MAX_PICK = 3;
+export const MAX_CAREER = 3;      // 주요 경력 줄 수
+export const CAREER_LEN = 60;     // 경력 한 줄 글자 수
+export const THESIS_LEN = 100;    // 논문 제목 글자 수
 
 // 구글 폼 질문 제목 = 응답 시트의 머리글. 운영진 화면의 '신청서 가져오기'가 이 제목으로 열을 찾습니다.
 // google-form/create_form.gs 의 질문 제목과 같아야 합니다.
 export const FORM_COLUMNS = {
   name: '이름',
+  type: '구분',
   cohort: '기수',
+  thesis: '학위논문 제목',
   email: '라운지 로그인 이메일',
   org: '회사·소속',
   title: '직무·직책',
   industry: '업종',
   fn: '직무 분야',
+  years: '총 경력 연차',
+  career: '주요 경력',
   offer: '내가 줄 수 있는 것',
   need: '내가 필요한 것',
   intro: '한 줄 소개',
@@ -61,7 +81,8 @@ export const FORM_COLUMNS = {
   share: '연락처 공개',
   agreeMap: '명부 공개 동의',
   agreePriv: '개인정보 수집·이용 동의',
-  approve: '승인'
+  approve: '승인',
+  synced: '라운지 반영'
 };
 export const SHARE_YES = '승인된 동문에게 공개';
 export const SHARE_NO = '소개 요청을 수락한 동문에게만 공개';

@@ -306,7 +306,7 @@ export function mountNetwork(root, opts) {
     return best;
   }
   function showTip(p) {
-    tip.innerHTML = `<b>${esc(p.name)}</b> <span>${p.cohort}기 · ${esc(IND[p.industry] || '')}</span><br>${esc(p.org)} <span>${esc(p.title)}</span>`;
+    tip.innerHTML = `<b>${esc(p.name)}</b> <span>${p.cohort}기${p.type === 'student' ? ' 재학' : ''} · ${esc(IND[p.industry] || '')}</span><br>${esc(p.org)} <span>${esc(p.title)}</span>`;
     tip.hidden = false;
     const sx = T.applyX(p.dx), sy = T.applyY(p.dy), vw = viz.clientWidth;
     let x = sx + 16; const y = sy - 12;
@@ -340,15 +340,16 @@ export function mountNetwork(root, opts) {
         <p class="nv-d">점을 누르면 그 동문을 중심으로 보여줍니다. 넓게 보려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.</p>
         ${me ? `<section class="nv-sec"><h3>나를 도울 수 있는 동문<b>${me.helpers.length}명</b></h3>
           ${me.helpers.slice(0, 3).map(o => row(o, H_(inter(o.offer, me.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다. 동문이 늘거나 ‘필요한 것’을 바꾸면 생깁니다.</span>'}
-          <button class="nv-btn" data-nact="center-me">나를 중심으로 보기</button></section>` : ''}
+          <div class="nv-actions"><button class="nv-btn" data-nact="center-me">나를 중심으로 보기</button><a class="nv-btn" href="#/match">시너지 추천 보기</a></div></section>` : ''}
         ${top.length ? `<section class="nv-sec"><h3>동문들이 가장 많이 찾는 도움</h3>${top.map(([h, c]) => `<div class="nv-bar"><span>${esc(HELP[h] || h)}</span><span class="nv-tr"><i style="--w:${(c / mx * 100).toFixed(1)}%"></i></span><b>${c}명</b></div>`).join('')}</section>` : ''}
         <p class="nv-note"><span class="nv-ring" aria-hidden="true"></span><span>금색 테두리가 나입니다.</span></p>`;
     } else {
       const self = p.uid === meUid;
       panel.innerHTML = `<div class="nv-ptop"><span class="nv-k">${self ? 'MY NETWORK' : 'ALUMNI'}</span><button class="nv-close" data-nact="clear">전체 보기</button></div>
         <h2>${esc(p.name)}${self ? ' <span class="nv-me">나</span>' : ''}</h2>
-        <p class="nv-meta">${p.cohort}기 · ${esc(IND[p.industry] || '')} · ${esc(FN[p.fn] || '')}</p>
+        <p class="nv-meta">${p.cohort}기${p.type === 'student' ? ' 재학' : ''} · ${esc(IND[p.industry] || '')} · ${esc(FN[p.fn] || '')}</p>
         <p class="nv-org">${esc(p.org)}<br><span>${esc(p.title)}</span></p>
+        ${(p.career || []).length ? `<p class="nv-d">경력 · ${esc(p.career.join(' / '))}</p>` : ''}
         ${p.intro ? `<p class="nv-d">${esc(p.intro)}</p>` : ''}
         <div class="nv-give"><div><h4>줄 수 있는 것</h4>${chips(p.offer, 'give')}</div><div><h4>필요한 것</h4>${chips(p.need, 'need')}</div></div>
         <div class="nv-actions"><button class="nv-btn" data-nact="profile" data-uid="${p.uid}">프로필 보기</button>${self ? '' : `<button class="nv-btn primary" data-nact="intro" data-uid="${p.uid}">소개 요청</button>`}</div>

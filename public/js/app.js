@@ -1,24 +1,23 @@
-// 라운지 화면과 흐름 (신청서 방식)
-// 구글 폼 신청 → 운영진이 응답을 가져와 등록 → 동문은 신청서 이메일로 '처음 로그인' → 지도·명부·소개 요청
+// 라운지 화면과 흐름 (신청서 방식 · 2판)
+// 구글 폼 신청(구글 로그인) → 운영진이 시트에서 '승인' 체크(자동 연동) → 신청한 구글 계정으로 로그인 → 지도·추천·명부·소개 요청
 
-import { INDUSTRIES as IND, FUNCTIONS as FN, HELPS as HELP, TYPES, YEARS, MAX_PICK, MAX_CAREER, CAREER_LEN, THESIS_LEN, FORM_COLUMNS as COL, SHARE_YES, AGREE } from './constants.js';
+import { INDUSTRIES as IND, FUNCTIONS as FN, HELPS as HELP, TYPES, YEARS, MAX_PICK, MAX_CAREER, CAREER_LEN, THESIS_LEN, ETC_LEN, YEAR_MIN, YEAR_MAX, COHORT_MAX, FORM_COLUMNS as COL, AGREE } from './constants.js';
 import * as api from './api.js';
 import { ENABLE_GOOGLE, FORM_URL } from './config.js';
 import { mountNetwork } from './network.js';
 import { recommend, synergy, companyGroups } from './synergy.js';
+import { helps, helpLabel, fnsOf, fnTokens, fnText, offerLabels, needLabels, etcList, cohortLabel, orderKey, inter } from './model.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const helps = (giver, taker) => (giver.offer || []).filter(x => (taker.need || []).includes(x));
-const labels = (arr, dict = HELP) => (arr || []).map(k => dict[k] || k);
-const tags = (arr, dict = HELP) => (arr && arr.length)
-  ? `<span class="tags">${arr.map(k => `<span class="tag">${esc(dict[k] || k)}</span>`).join('')}</span>`
+// 글자 목록 → 태그
+const tags = list => (list && list.length)
+  ? `<span class="tags">${list.map(x => `<span class="tag">${esc(x)}</span>`).join('')}</span>`
   : '<span class="muted">없음</span>';
 const when = ts => { const d = ts && ts.toDate ? ts.toDate() : null; return d ? `${d.getMonth() + 1}월 ${d.getDate()}일` : '방금'; };
 const ms = ts => (ts && ts.toMillis ? ts.toMillis() : Date.now());
 const formLink = (cls = 'btn btn-ghost') => FORM_URL ? `<a class="${cls}" href="${esc(FORM_URL)}" target="_blank" rel="noopener">신청서 작성하기</a>` : '';
-// '22기', 재학생이면 '22기 재학'
-const cohortLabel = u => `${u.cohort}기${u.type === 'student' ? ' 재학' : ''}`;
+const FN_PICK = Object.fromEntries(Object.entries(FN).filter(([k]) => k !== 'etc'));
 const yearsLabel = u => (YEARS[u.years] ? `경력 ${YEARS[u.years]}` : '');
 const careerList = u => (u.career || []).filter(Boolean);
 const careerHTML = u => careerList(u).length
@@ -109,17 +108,22 @@ V.login = () => {
   <section class="login-intro" aria-labelledby="lt">
     ${seal(84)}
     <p class="eyebrow">KYUNG HEE BRAND MBA · SINCE 1998</p>
-    <h1 id="lt">경희 브랜드MBA<br>동문 라운지</h1>
-    <p class="lead">1기부터 지금까지, 브랜드를 만드는 사람들이 서로를 찾는 곳입니다. 신청서를 내고 운영진이 명부에 등록한 동문만 들어올 수 있습니다.</p>
+    <h1 id="lt">경희 브랜드MBA<br>라운지</h1>
+    <p class="lead">브랜드를 만드는 동문과 학술회 참가자가 서로를 찾는 곳입니다. 신청서를 내고 운영진이 등록한 분만 들어올 수 있습니다.</p>
     <ol class="flow">
-      <li><b>신청서 제출</b><span>구글 폼</span></li>
-      <li><b>운영진 등록</b><span>동문 여부 확인</span></li>
-      <li><b>처음 로그인</b><span>신청서 이메일로 비밀번호 만들기</span></li>
-      <li><b>라운지 이용</b><span>지도, 명부, 소개 요청</span></li>
+      <li><b>신청서 제출</b><span>구글 계정으로 로그인해 작성</span></li>
+      <li><b>운영진 등록</b><span>신청 내용 확인</span></li>
+      <li><b>로그인</b><span>신청한 구글 계정으로</span></li>
+      <li><b>라운지 이용</b><span>지도, 시너지 추천, 명부</span></li>
     </ol>
     ${FORM_URL ? `<p class="hint">아직 신청서를 내지 않으셨나요? ${formLink('linkish')}</p>` : ''}
   </section>
   <section class="login-box card" aria-label="로그인">
+    ${ENABLE_GOOGLE ? `<div class="stack g-first">
+      <button class="btn btn-primary btn-block" type="button" data-act="google">신청한 구글 계정으로 로그인</button>
+      <p class="mini">신청서를 낸 구글 계정을 고르면 바로 들어갑니다.</p>
+    </div>
+    <p class="or">또는 이메일과 비밀번호</p>` : ''}
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="${t === 'login'}" data-act="tab" data-tab="login">로그인</button>
       <button role="tab" aria-selected="${t === 'activate'}" data-act="tab" data-tab="activate">처음 로그인</button>
@@ -128,17 +132,16 @@ V.login = () => {
       <div class="field"><label for="li-email">이메일</label><input id="li-email" type="email" autocomplete="username" required></div>
       <div class="field"><label for="li-pw">비밀번호</label><input id="li-pw" type="password" autocomplete="current-password" required></div>
       <p class="ferr" id="li-err" role="alert"></p>
-      <button class="btn btn-primary btn-block" type="submit">로그인</button>
+      <button class="btn ${ENABLE_GOOGLE ? 'btn-ghost' : 'btn-primary'} btn-block" type="submit">로그인</button>
       <button class="linklike" type="button" data-act="forgot">비밀번호를 잊으셨나요?</button>
     </form>` : `<form id="act-form" class="stack" novalidate>
-      <p class="hint">신청서에 적은 <b>라운지 로그인 이메일</b>로 비밀번호를 만듭니다. 인증 메일의 링크를 누르면 바로 들어갈 수 있어요.</p>
-      <div class="field"><label for="ac-email">신청서에 적은 이메일</label><input id="ac-email" type="email" autocomplete="email" required></div>
+      <p class="hint">신청할 때 로그인한 <b>구글 계정 이메일</b>로 비밀번호를 만듭니다. 인증 메일의 링크를 누르면 바로 들어갈 수 있어요.</p>
+      <div class="field"><label for="ac-email">신청한 구글 계정 이메일</label><input id="ac-email" type="email" autocomplete="email" required></div>
       <div class="field"><label for="ac-pw">새 비밀번호 <small>8자 이상</small></label><input id="ac-pw" type="password" autocomplete="new-password" minlength="8" required></div>
       <div class="field"><label for="ac-pw2">비밀번호 확인</label><input id="ac-pw2" type="password" autocomplete="new-password" required></div>
       <p class="ferr" id="ac-err" role="alert"></p>
-      <button class="btn btn-primary btn-block" type="submit">비밀번호 만들고 인증 메일 받기</button>
+      <button class="btn ${ENABLE_GOOGLE ? 'btn-ghost' : 'btn-primary'} btn-block" type="submit">비밀번호 만들고 인증 메일 받기</button>
     </form>`}
-    ${ENABLE_GOOGLE ? `<p class="or">또는</p><button class="btn btn-ghost btn-block" type="button" data-act="google">Google 계정으로 계속하기</button><p class="mini">신청서에 Gmail을 적었다면 바로 쓸 수 있습니다.</p>` : ''}
     <p class="mini"><a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></p>
   </section>
 </div>`;
@@ -158,7 +161,7 @@ V.verify = () => `<div class="wrap narrow"><section class="card pend" aria-label
 V.notyet = () => `<div class="wrap narrow"><section class="card pend" aria-labelledby="nt">
   <p class="eyebrow-k">명부 등록 전</p>
   <h1 id="nt">이 이메일은 아직 명부에 없습니다</h1>
-  <p class="sub"><b>${esc(S.user.email)}</b>(으)로 로그인했어요. 신청서에 적은 이메일과 같은지 확인해 주세요. 신청서를 이미 냈다면 운영진이 등록하는 대로 이 화면이 라운지로 바뀝니다.</p>
+  <p class="sub"><b>${esc(S.user.email)}</b>(으)로 로그인했어요. 신청서를 낸 구글 계정과 같은지 확인해 주세요. 신청서를 이미 냈다면 운영진이 등록하는 대로 이 화면이 라운지로 바뀝니다.</p>
   <ol class="steps">
     <li><b>신청서 제출</b><span>구글 폼</span></li>
     <li class="now"><b>운영진 등록</b><span>보통 며칠 안에</span></li>
@@ -170,7 +173,7 @@ V.notyet = () => `<div class="wrap narrow"><section class="card pend" aria-label
 V.hidden = () => `<div class="wrap narrow"><section class="card pend" aria-labelledby="ht">
   <p class="eyebrow-k">명부에서 내려감</p>
   <h1 id="ht">지금은 라운지를 이용할 수 없습니다</h1>
-  <p class="sub">운영진이 명부에서 잠시 내린 상태입니다. 궁금한 점은 동문회 단체방이나 운영진에게 문의해 주세요.</p>
+  <p class="sub">운영진이 명부에서 잠시 내린 상태입니다. 궁금한 점은 운영진에게 문의해 주세요.</p>
   <div class="row-btns">${S.admin ? '<a class="btn btn-primary" href="#/admin">운영진 화면 열기</a>' : ''}<button class="btn btn-ghost" data-act="logout">로그아웃</button></div>
 </section></div>`;
 
@@ -184,21 +187,23 @@ V.form = () => {
     }).join('');
     return `<div class="field"><span class="label" id="lb-${k}">${label}${single ? '' : ` <small id="cnt-${k}">${f[k].length}/${max}</small>`}</span><div class="picks" role="group" aria-labelledby="lb-${k}" data-key="${k}" data-group="${k}" data-max="${max}"${single ? ' data-single="1"' : ''} tabindex="-1">${btns}</div><p class="ferr" id="e-${k}"></p></div>`;
   };
+  const isConf = f.type === 'conf';
   return `<div class="wrap narrow">
   <header class="page-head">
     <p class="eyebrow-k">프로필 수정</p>
     <h1>내 프로필 고치기</h1>
-    <p class="sub">바꾼 내용은 명부와 네트워크 지도에 바로 반영됩니다.</p>
+    <p class="sub">바꾼 내용은 명부, 네트워크 지도, 시너지 추천에 바로 반영됩니다.</p>
   </header>
   <form id="pf" novalidate>
     <section class="fs" aria-labelledby="fs1"><h2 id="fs1">기본 정보</h2>
-      <div class="g2">
-        ${inp('name', '이름', 'text', 'autocomplete="name" maxlength="20"')}
-        ${inp('cohort', '기수', 'text', 'inputmode="numeric" maxlength="2"')}
-      </div>
       ${grp('type', '구분', TYPES, 1, true)}
-      ${inp('thesis', `학위논문 제목 <small>선택 · 최대 ${THESIS_LEN}자</small>`, 'text', `maxlength="${THESIS_LEN}" placeholder="논문 주제가 비슷한 동문을 찾아 드려요"`)}
-      <div class="field"><span class="label">로그인 이메일</span><p class="static">${esc(S.user.email)}</p><p class="mini">이메일을 바꾸려면 운영진에게 요청해 주세요.</p></div>
+      ${inp('name', '이름', 'text', 'autocomplete="name" maxlength="20"')}
+      ${isConf ? '' : `<div class="g2">
+        ${inp('year', '입학 연도', 'text', 'inputmode="numeric" maxlength="4" placeholder="예: 2015"')}
+        ${inp('cohort', '기수 <small>선택</small>', 'text', 'inputmode="numeric" maxlength="2" placeholder="모르면 비워 두세요"')}
+      </div>`}
+      ${f.type === 'grad' ? inp('thesis', `학위논문 제목 <small>선택 · 최대 ${THESIS_LEN}자</small>`, 'text', `maxlength="${THESIS_LEN}" placeholder="논문 주제가 비슷한 사람을 찾아 드려요"`) : ''}
+      <div class="field"><span class="label">로그인 이메일</span><p class="static">${esc(S.user.email)}</p><p class="mini">라운지 이용자에게 보이는 연락처입니다. 바꾸려면 운영진에게 요청해 주세요.</p></div>
     </section>
     <section class="fs" aria-labelledby="fs2"><h2 id="fs2">지금 하는 일과 경력</h2>
       <div class="g2">
@@ -206,22 +211,24 @@ V.form = () => {
         ${inp('title', '직무·직책', 'text', 'maxlength="40"')}
       </div>
       ${grp('industry', '업종', IND, 1, true)}
-      ${grp('fn', '직무 분야', FN, 1, true)}
+      ${grp('fn', '직무 분야', FN_PICK, MAX_PICK, false)}
+      ${inp('fnEtc', '직무 분야 · 기타 <small>목록에 없으면 직접</small>', 'text', `maxlength="${ETC_LEN}"`)}
       ${grp('years', '총 경력 연차', YEARS, 1, true)}
       <div class="field"><span class="label" id="lb-career">주요 경력 <small>선택 · 최대 ${MAX_CAREER}줄</small></span>
-        <p class="mini">‘회사 · 직무 · 기간’ 순서로 적으면 같은 회사를 거친 동문을 찾아 드려요. 예: CJ제일제당 · 브랜드매니저 · 2015–2020</p>
+        <p class="mini">‘회사 · 직무 · 기간’ 순서로 적으면 같은 회사를 거친 사람을 찾아 드려요. 예: CJ제일제당 · 브랜드매니저 · 2015–2020</p>
         <div class="career-in" role="group" aria-labelledby="lb-career">${[0, 1, 2].slice(0, MAX_CAREER).map(i => `<input id="f-career${i}" data-key="career${i}" type="text" maxlength="${CAREER_LEN}" value="${esc(f['career' + i])}" aria-label="주요 경력 ${i + 1}">`).join('')}</div>
       </div>
     </section>
-    <section class="fs" aria-labelledby="fs3"><h2 id="fs3">동문과 주고받을 것</h2>
-      <p class="hint">두 항목은 같은 목록에서 고릅니다. 내가 필요한 것을 다른 동문이 줄 수 있으면 네트워크 지도에 선이 생깁니다.</p>
+    <section class="fs" aria-labelledby="fs3"><h2 id="fs3">라운지에서 주고받을 것</h2>
+      <p class="hint">두 항목은 같은 목록에서 고릅니다. 내가 필요한 것을 다른 사람이 줄 수 있으면 시너지 추천과 네트워크 지도에서 이어집니다. ‘기타’에 같은 말을 적은 사람끼리도 이어져요.</p>
       ${grp('offer', '내가 줄 수 있는 것', HELP, MAX_PICK, false)}
+      ${inp('offerEtc', '줄 수 있는 것 · 기타 <small>쉼표로 여러 개</small>', 'text', `maxlength="${ETC_LEN}"`)}
       ${grp('need', '내가 필요한 것', HELP, MAX_PICK, false)}
-      ${inp('intro', '한 줄 소개 <small>선택 · 최대 60자</small>', 'text', 'maxlength="60" placeholder="동문들에게 보일 한 문장"')}
+      ${inp('needEtc', '필요한 것 · 기타 <small>쉼표로 여러 개</small>', 'text', `maxlength="${ETC_LEN}"`)}
+      ${inp('intro', '한 줄 소개 <small>선택 · 최대 60자</small>', 'text', 'maxlength="60" placeholder="라운지 이용자에게 보일 한 문장"')}
     </section>
-    <section class="fs" aria-labelledby="fs4"><h2 id="fs4">연락처 공개</h2>
-      ${inp('phone', '휴대폰 <small>선택</small>', 'tel', 'maxlength="20" autocomplete="tel" placeholder="010-0000-0000"')}
-      <label class="check"><input type="checkbox" id="f-share" data-key="share" ${f.share ? 'checked' : ''}><span>승인된 동문에게 내 이메일과 휴대폰 공개<small>끄면 소개 요청을 내가 수락한 동문에게만 보입니다.</small></span></label>
+    <section class="fs" aria-labelledby="fs4"><h2 id="fs4">휴대폰</h2>
+      ${inp('phone', '휴대폰 <small>운영진만 봅니다</small>', 'tel', 'maxlength="20" autocomplete="tel" placeholder="010-0000-0000"')}
     </section>
     <div class="form-foot">
       <p class="err-sum" id="err-sum" role="alert"></p>
@@ -243,18 +250,18 @@ V.net = () => `<div class="wrap wide">
 V.dir = () => {
   const f = S.filter;
   return `<div class="wrap">
-  <header class="page-head"><p class="eyebrow-k">동문 명부</p><h1>누가 어디서 무슨 일을 하고 있을까요</h1></header>
+  <header class="page-head"><p class="eyebrow-k">명부</p><h1>누가 어디서 무슨 일을 하고 있을까요</h1></header>
   <div class="toolbar">
-    <label><span class="sr-only">동문 검색</span><input id="dir-q" type="search" placeholder="이름, 회사, 경력, 논문 주제, 기수로 찾기" value="${esc(f.q)}"></label>
+    <label><span class="sr-only">명부 검색</span><input id="dir-q" type="search" placeholder="이름, 회사, 경력, 논문 주제, 기수로 찾기" value="${esc(f.q)}"></label>
     <div class="filters" role="group" aria-label="업종으로 거르기">
       <button class="pick" data-act="ind" data-val="all" aria-pressed="${f.ind === 'all'}">전체 업종</button>
       ${Object.entries(IND).map(([k, v]) => `<button class="pick" data-act="ind" data-val="${k}" aria-pressed="${f.ind === k}">${esc(v)}</button>`).join('')}
     </div>
-    <div class="filters" role="group" aria-label="졸업생·재학생으로 거르기">
-      <button class="pick" data-act="dtype" data-val="all" aria-pressed="${f.type === 'all'}">졸업생·재학생 모두</button>
+    <div class="filters" role="group" aria-label="구분으로 거르기">
+      <button class="pick" data-act="dtype" data-val="all" aria-pressed="${f.type === 'all'}">모든 구분</button>
       ${Object.entries(TYPES).map(([k, v]) => `<button class="pick" data-act="dtype" data-val="${k}" aria-pressed="${f.type === k}">${esc(v)}</button>`).join('')}
     </div>
-    <label class="toggle"><input type="checkbox" id="dir-help" ${f.helpMe ? 'checked' : ''}>나에게 도움 줄 수 있는 동문만 보기</label>
+    <label class="toggle"><input type="checkbox" id="dir-help" ${f.helpMe ? 'checked' : ''}>나에게 도움 줄 수 있는 사람만 보기</label>
   </div>
   <p class="count" id="dir-count" aria-live="polite"></p>
   <div class="dir-grid" id="dir-list"></div>
@@ -269,8 +276,8 @@ function dirCard(u) {
     <span class="drole">${esc(u.org)} · ${esc(u.title)}</span>
     ${cr.length ? `<span class="dcareer"><i>경력</i>${esc(cr[0])}${cr.length > 1 ? ` <small>외 ${cr.length - 1}</small>` : ''}</span>` : ''}
     <span class="mini">줄 수 있는 것</span>
-    ${tags(u.offer)}
-    ${h.length ? `<span class="dmatch">내게 필요한 ${esc(HELP[h[0]])} 도움 가능</span>` : ''}
+    ${tags(offerLabels(u))}
+    ${h.length ? `<span class="dmatch">내게 필요한 ${esc(helpLabel(h[0]))} 도움 가능</span>` : ''}
   </button>`;
 }
 function renderDirList() {
@@ -281,12 +288,12 @@ function renderDirList() {
     if (f.type !== 'all' && (u.type || 'grad') !== f.type) return false;
     if (f.helpMe && (u.uid === S.mid || !helps(u, S.member).length)) return false;
     if (q) {
-      const hay = [u.name, u.org, u.title, IND[u.industry], FN[u.fn], u.cohort + '기', TYPES[u.type], YEARS[u.years], u.thesis, ...careerList(u), u.intro, ...labels(u.offer), ...labels(u.need)].join(' ').toLowerCase();
+      const hay = [u.name, u.org, u.title, IND[u.industry], fnText(u), cohortLabel(u), u.year ? u.year + '' : '', TYPES[u.type], YEARS[u.years], u.thesis, ...careerList(u), u.intro, ...offerLabels(u), ...needLabels(u)].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
-  }).sort((a, b) => a.cohort - b.cohort || a.name.localeCompare(b.name, 'ko'));
-  $('#dir-count').textContent = `동문 ${S.members.length}명 중 ${L.length}명`;
+  }).sort((a, b) => orderKey(a) - orderKey(b) || a.name.localeCompare(b.name, 'ko'));
+  $('#dir-count').textContent = `${S.members.length}명 중 ${L.length}명`;
   box.innerHTML = L.length ? L.map(dirCard).join('') : '<p class="empty">조건에 맞는 동문이 없습니다. 검색어나 업종, 구분을 바꿔 보세요.</p>';
 }
 
@@ -294,10 +301,10 @@ function renderDirList() {
 V.match = () => {
   const me = S.member, others = S.members.filter(o => o.uid !== S.mid);
   const recs = recommend(me, S.members, 9);
-  const thin = !careerList(me).length || !me.thesis;
+  const noThesis = me.type === 'grad' && !me.thesis, thin = !careerList(me).length || noThesis;
   const rc = x => `<article class="rcard">
     <button class="rc-main" data-act="profile" data-id="${x.u.uid}">
-      <span class="dtop"><span>${esc(IND[x.u.industry] || '')} · ${esc(FN[x.u.fn] || '')}</span><span class="coh">${esc(cohortLabel(x.u))}</span></span>
+      <span class="dtop"><span>${esc(IND[x.u.industry] || '')} · ${esc(fnText(x.u))}</span><span class="coh">${esc(cohortLabel(x.u))}</span></span>
       <span class="dname">${esc(x.u.name)}</span>
       <span class="drole">${esc(x.u.org)} · ${esc(x.u.title)}</span>
     </button>
@@ -307,32 +314,33 @@ V.match = () => {
   // 업종별 동문 수(나 포함)
   const cnt = Object.keys(IND).map(k => [k, S.members.filter(u => u.industry === k).length]).filter(c => c[1]);
   const mx = Math.max(1, ...cnt.map(c => c[1]));
+  const sameFn = o => inter(fnTokens(o), fnTokens(me)).length > 0;
   const peers = others.filter(o => o.industry === me.industry)
-    .sort((a, b) => (a.fn === me.fn ? 0 : 1) - (b.fn === me.fn ? 0 : 1) || a.cohort - b.cohort);
+    .sort((a, b) => (sameFn(a) ? 0 : 1) - (sameFn(b) ? 0 : 1) || orderKey(a) - orderKey(b));
   const groups = companyGroups(S.members).slice(0, 12);
-  const chip = u => `<button class="pchip" data-act="profile" data-id="${u.uid}">${esc(u.name)}<small>${esc(cohortLabel(u))}${u.fn === me.fn && u.industry === me.industry ? ' · 같은 직무' : ''}</small></button>`;
+  const chip = u => `<button class="pchip" data-act="profile" data-id="${u.uid}">${esc(u.name)}<small>${esc(cohortLabel(u))}${u.industry === me.industry && sameFn(u) ? ' · 같은 직무' : ''}</small></button>`;
   return `<div class="wrap">
-  <header class="page-head"><p class="eyebrow-k">시너지 추천</p><h1>나와 시너지가 날 동문</h1>
-  <p class="sub">내가 필요한 것과 줄 수 있는 것, 거쳐 온 회사, 업종과 직무, 논문 주제를 맞춰 골랐어요.</p></header>
-  ${thin ? `<p class="nudge">주요 경력${me.thesis ? '' : '과 학위논문 제목'}을 채우면 같은 회사를 거친 동문${me.thesis ? '' : ', 논문 주제가 비슷한 동문'}까지 찾아 드려요. <button class="linklike" data-act="edit-profile">프로필 채우기</button></p>` : ''}
+  <header class="page-head"><p class="eyebrow-k">시너지 추천</p><h1>나와 시너지가 날 사람</h1>
+  <p class="sub">내가 필요한 것과 줄 수 있는 것, 거쳐 온 회사, 업종과 직무, 논문 주제를 맞춰 동문과 학술회 참가자 중에서 골랐어요.</p></header>
+  ${thin ? `<p class="nudge">${careerList(me).length ? '' : '주요 경력'}${!careerList(me).length && noThesis ? '과 ' : ''}${noThesis ? '학위논문 제목' : ''}을 채우면 ${careerList(me).length ? '' : '같은 회사를 거친 사람'}${!careerList(me).length && noThesis ? ', ' : ''}${noThesis ? '논문 주제가 비슷한 사람' : ''}까지 찾아 드려요. <button class="linklike" data-act="edit-profile">프로필 채우기</button></p>` : ''}
   <section class="msec" aria-labelledby="m1">
-    <div class="sec-head"><h2 id="m1">추천 동문</h2><span class="muted">${recs.length}명</span></div>
+    <div class="sec-head"><h2 id="m1">추천</h2><span class="muted">${recs.length}명</span></div>
     ${recs.length ? `<div class="rec-grid">${recs.map(rc).join('')}</div>`
-      : `<p class="empty">${others.length ? '아직 겹치는 동문이 없어요. ‘필요한 것’과 ‘줄 수 있는 것’을 넓히거나 경력을 채워 보세요.' : '아직 명부에 다른 동문이 없어요. 동문이 늘어나면 여기에 추천이 생깁니다.'}</p>`}
+      : `<p class="empty">${others.length ? '아직 겹치는 사람이 없어요. ‘필요한 것’과 ‘줄 수 있는 것’을 넓히거나 경력을 채워 보세요.' : '아직 명부에 다른 사람이 없어요. 등록이 늘어나면 여기에 추천이 생깁니다.'}</p>`}
   </section>
   <div class="two">
     <section class="card msec-card" aria-labelledby="m2">
       <h2 id="m2">동종업계 네트워크</h2>
-      <p class="hint">업종을 누르면 명부에서 그 업종 동문만 볼 수 있어요.</p>
+      <p class="hint">업종을 누르면 명부에서 그 업종만 볼 수 있어요.</p>
       <div class="ind-bars">${cnt.length ? cnt.map(([k, c]) => `<button class="drow ib${k === me.industry ? ' mine' : ''}" data-act="dir-ind" data-val="${k}"><span>${esc(IND[k])}${k === me.industry ? ' <em>내 업종</em>' : ''}</span><span class="dbar"><i style="width:${(c / mx * 100).toFixed(1)}%"></i></span><b>${c}</b></button>`).join('') : '<p class="hint">아직 동문이 없습니다.</p>'}</div>
-      <h3 class="m-h3">${esc(IND[me.industry] || '')} 동문 <span class="muted">${peers.length}명</span></h3>
-      <div class="pchips">${peers.length ? peers.slice(0, 24).map(chip).join('') + (peers.length > 24 ? `<button class="linklike" data-act="dir-ind" data-val="${me.industry}">${peers.length - 24}명 더 보기</button>` : '') : '<span class="muted">아직 같은 업종 동문이 없어요.</span>'}</div>
+      <h3 class="m-h3">${esc(IND[me.industry] || '')} <span class="muted">${peers.length}명</span></h3>
+      <div class="pchips">${peers.length ? peers.slice(0, 24).map(chip).join('') + (peers.length > 24 ? `<button class="linklike" data-act="dir-ind" data-val="${me.industry}">${peers.length - 24}명 더 보기</button>` : '') : '<span class="muted">아직 같은 업종인 사람이 없어요.</span>'}</div>
     </section>
     <section class="card msec-card" aria-labelledby="m3">
-      <h2 id="m3">같은 회사를 거친 동문</h2>
-      <p class="hint">현재 소속과 주요 경력에 적힌 회사가 같은 동문끼리 묶었어요.</p>
+      <h2 id="m3">같은 회사를 거친 사람</h2>
+      <p class="hint">현재 소속과 주요 경력에 적힌 회사가 같은 사람끼리 묶었어요.</p>
       ${groups.length ? `<div class="co-list">${groups.map(g => `<div class="co-row${g.people.some(p => p.uid === S.mid) ? ' mine' : ''}"><b>${esc(g.name)}</b><span class="muted">${g.people.length}명</span><div class="pchips">${g.people.map(p => p.uid === S.mid ? `<span class="pchip me">나</span>` : chip(p)).join('')}</div></div>`).join('')}</div>`
-        : '<p class="empty">아직 같은 회사를 거친 동문 묶음이 없어요. 동문들이 주요 경력을 채우면 생깁니다.</p>'}
+        : '<p class="empty">아직 같은 회사를 거친 묶음이 없어요. 주요 경력이 채워지면 생깁니다.</p>'}
     </section>
   </div>
 </div>`;
@@ -344,21 +352,21 @@ V.intros = () => {
   const who = id => S.members.find(m => m.uid === id);
   const badge = st => ({ pending: '<span class="badge warn">대기 중</span>', accepted: '<span class="badge ok">수락됨</span>', declined: '<span class="badge">거절됨</span>' }[st] || '');
   const recv = i => `<article class="icard">
-    <header><b>${esc(i.fromName)}</b><span>${i.fromCohort}기</span>${badge(i.status)}<time>${when(i.createdAt)}</time></header>
+    <header><b>${esc(i.fromName)}</b><span>${who(i.from) ? esc(cohortLabel(who(i.from))) : (i.fromCohort ? i.fromCohort + '기' : '')}</span>${badge(i.status)}<time>${when(i.createdAt)}</time></header>
     <p class="imsg">${esc(i.message)}</p>
-    ${i.status === 'pending' ? `<div class="row-btns"><button class="btn btn-primary btn-sm" data-act="accept" data-id="${esc(i.id)}">수락하고 연락처 공개</button><button class="btn btn-ghost btn-sm" data-act="decline" data-id="${esc(i.id)}">거절</button>${who(i.from) ? `<button class="btn btn-ghost btn-sm" data-act="profile" data-id="${esc(i.from)}">프로필 보기</button>` : ''}</div>` : ''}
-    ${i.status === 'accepted' ? `<div class="contact" data-contact="${esc(i.from)}"><span class="muted">연락처 불러오는 중</span></div>` : ''}
+    ${i.status === 'pending' ? `<div class="row-btns"><button class="btn btn-primary btn-sm" data-act="accept" data-id="${esc(i.id)}">수락</button><button class="btn btn-ghost btn-sm" data-act="decline" data-id="${esc(i.id)}">거절</button>${who(i.from) ? `<button class="btn btn-ghost btn-sm" data-act="profile" data-id="${esc(i.from)}">프로필 보기</button>` : ''}</div>` : ''}
+    ${i.status === 'accepted' ? `<div class="contact" data-contact="${esc(i.from)}"><span class="muted">이메일 불러오는 중</span></div>` : ''}
   </article>`;
   const sent = i => { const m = who(i.to); return `<article class="icard">
-    <header><b>${m ? esc(m.name) : '동문'}</b>${m ? `<span>${m.cohort}기</span>` : ''}${badge(i.status)}<time>${when(i.createdAt)}</time></header>
+    <header><b>${m ? esc(m.name) : '이용자'}</b>${m ? `<span>${esc(cohortLabel(m))}</span>` : ''}${badge(i.status)}<time>${when(i.createdAt)}</time></header>
     <p class="imsg">${esc(i.message)}</p>
-    ${i.status === 'accepted' ? `<div class="contact" data-contact="${esc(i.to)}"><span class="muted">연락처 불러오는 중</span></div>` : ''}
+    ${i.status === 'accepted' ? `<div class="contact" data-contact="${esc(i.to)}"><span class="muted">이메일 불러오는 중</span></div>` : ''}
     ${i.status === 'pending' ? `<div class="row-btns"><button class="btn btn-ghost btn-sm" data-act="cancel-intro" data-id="${esc(i.id)}">요청 취소</button></div>` : ''}
     ${i.status === 'declined' ? `<div class="row-btns"><span class="muted">이번에는 연결되지 않았습니다.</span><button class="btn btn-ghost btn-sm" data-act="cancel-intro" data-id="${esc(i.id)}">목록에서 지우기</button></div>` : ''}
   </article>`; };
   return `<div class="wrap narrow">
   <header class="page-head"><p class="eyebrow-k">소개 요청</p><h1>동문과 연결되는 곳</h1>
-  <p class="sub">요청을 수락하면 두 사람의 이메일과 휴대폰이 서로에게 공개됩니다. 새 요청은 메일로 알려드리지 않으니 가끔 들러 확인해 주세요.</p></header>
+  <p class="sub">소개 요청은 라운지 안에서 먼저 인사를 건네는 방법이에요. 수락하면 ‘연결됨’으로 표시되고, 이메일로 바로 이야기를 이어 가면 됩니다. 새 요청은 메일로 알려드리지 않으니 가끔 들러 확인해 주세요.</p></header>
   <section class="isec" aria-labelledby="ir"><h2 id="ir">받은 요청 <span class="muted">${R.length}</span></h2>${R.length ? R.map(recv).join('') : '<p class="empty">아직 받은 요청이 없습니다.</p>'}</section>
   <section class="isec" aria-labelledby="is"><h2 id="is">보낸 요청 <span class="muted">${Sn.length}</span></h2>${Sn.length ? Sn.map(sent).join('') : '<p class="empty">지도나 명부에서 동문을 골라 소개 요청을 보내 보세요.</p>'}</section>
 </div>`;
@@ -367,32 +375,36 @@ V.intros = () => {
 V.me = () => {
   const u = S.member, others = S.members.filter(o => o.uid !== u.uid);
   const inn = others.filter(o => helps(o, u).length).length, out = others.filter(o => helps(u, o).length).length;
-  const no = `BM-${String(u.cohort).padStart(2, '0')}-${S.mid.slice(0, 4).toUpperCase()}`;
+  const no = `BM-${u.type === 'conf' ? 'AC' : String(u.cohort || (u.year ? String(u.year).slice(2) : '00')).padStart(2, '0')}-${S.mid.slice(0, 4).toUpperCase()}`;
+  const card = u.type === 'conf' ? 'BRAND MBA<br>ACADEMIC' : 'BRAND MBA<br>ALUMNI';
   return `<div class="wrap">
   <header class="page-head"><p class="eyebrow-k">내 프로필</p><h1>${esc(u.name)}</h1></header>
   <div class="me-grid">
-    <div class="mcard" role="img" aria-label="${esc(u.name)} 동문증, ${u.cohort}기, ${esc(IND[u.industry] || '')}, 회원번호 ${no}">
-      <div class="mc-top">${seal(52, true)}<p class="mc-eyebrow">BRAND MBA<br>ALUMNI</p></div>
+    <div class="mcard" role="img" aria-label="${esc(u.name)} 라운지 카드, ${esc(cohortLabel(u))}, ${esc(IND[u.industry] || '')}, 회원번호 ${no}">
+      <div class="mc-top">${seal(52, true)}<p class="mc-eyebrow">${card}</p></div>
       <div><p class="mc-name">${esc(u.name)}</p><p class="mc-meta">${esc(cohortLabel(u))} · ${esc(IND[u.industry] || '')}</p><p class="mc-no">${no}</p></div>
     </div>
     <section class="card me-body" aria-label="프로필 정보">
       <dl class="kv">
         <dt>구분</dt><dd>${esc(TYPES[u.type] || '')}</dd>
         <dt>회사·직책</dt><dd>${esc(u.org)} · ${esc(u.title)}</dd>
-        <dt>업종 · 직무</dt><dd>${esc(IND[u.industry] || '')} · ${esc(FN[u.fn] || '')}</dd>
+        ${u.type === 'conf' ? '' : `<dt>입학</dt><dd>${u.year ? u.year + '년' : '<span class="muted">비어 있음</span>'}${u.cohort ? ` · ${u.cohort}기` : ''}</dd>`}
+        <dt>업종</dt><dd>${esc(IND[u.industry] || '')}</dd>
+        <dt>직무 분야</dt><dd>${esc(fnText(u)) || '<span class="muted">비어 있음</span>'}</dd>
         <dt>경력 연차</dt><dd>${esc(YEARS[u.years] || '')}</dd>
         <dt>주요 경력</dt><dd>${careerHTML(u)}</dd>
-        <dt>학위논문</dt><dd>${u.thesis ? esc(u.thesis) : '<span class="muted">비어 있음</span>'}</dd>
-        <dt>줄 수 있는 것</dt><dd>${tags(u.offer)}</dd>
-        <dt>필요한 것</dt><dd>${tags(u.need)}</dd>
+        ${u.type === 'grad' ? `<dt>학위논문</dt><dd>${u.thesis ? esc(u.thesis) : '<span class="muted">비어 있음</span>'}</dd>` : ''}
+        <dt>줄 수 있는 것</dt><dd>${tags(offerLabels(u))}</dd>
+        <dt>필요한 것</dt><dd>${tags(needLabels(u))}</dd>
         <dt>한 줄 소개</dt><dd>${u.intro ? esc(u.intro) : '<span class="muted">비어 있음</span>'}</dd>
-        <dt>연락처</dt><dd data-mycontact><span class="muted">불러오는 중</span></dd>
+        <dt>이메일</dt><dd data-mycontact><span class="muted">불러오는 중</span></dd>
+        <dt>휴대폰</dt><dd data-myphone><span class="muted">불러오는 중</span></dd>
       </dl>
       <div class="row-btns"><button class="btn btn-ghost" data-act="edit-profile">프로필 고치기</button><button class="btn btn-ghost" data-act="logout">로그아웃</button></div>
     </section>
   </div>
   <section class="card me-links"><p><b>${inn}명</b>이 내가 필요한 것을 줄 수 있고, 나는 <b>${out}명</b>에게 도움을 줄 수 있습니다.</p><div class="row-btns"><a class="btn btn-primary" href="#/match">시너지 추천 보기</a><a class="btn btn-ghost" href="#/net" data-act="center-me">지도에서 보기</a></div></section>
-  <section class="danger"><h2>탈퇴</h2><p class="hint">탈퇴하면 프로필, 연락처, 주고받은 소개 요청이 바로 삭제되고 되돌릴 수 없습니다. 운영진이 신청서 응답도 지웁니다.</p><button class="btn btn-danger-ghost" data-act="withdraw">라운지 탈퇴하기</button></section>
+  <section class="danger"><h2>탈퇴</h2><p class="hint">탈퇴하면 프로필, 이메일·휴대폰, 주고받은 소개 요청이 바로 삭제되고 되돌릴 수 없습니다. 운영진이 신청서 응답도 지웁니다.</p><button class="btn btn-danger-ghost" data-act="withdraw">라운지 탈퇴하기</button></section>
 </div>`;
 };
 
@@ -435,7 +447,7 @@ V.admin = () => {
 
   <section class="adm-sec" aria-labelledby="al">
     <div class="sec-head"><h2 id="al">동문 목록</h2><span class="muted">${S.all.length}명</span><button class="btn btn-ghost btn-sm push" data-act="reload-admin">새로고침</button></div>
-    <label><span class="sr-only">동문 찾기</span><input id="adm-q" type="search" placeholder="이름, 이메일, 회사, 기수로 찾기" value="${esc(S.adminQ)}"></label>
+    <label><span class="sr-only">이용자 찾기</span><input id="adm-q" type="search" placeholder="이름, 이메일, 휴대폰, 회사, 기수로 찾기" value="${esc(S.adminQ)}"></label>
     <div class="arows" id="adm-list"></div>
   </section>
 
@@ -457,8 +469,8 @@ function renderAdminList() {
   const L = S.all.filter(u => {
     if (!q) return true;
     const c = S.allContacts[u.uid] || {};
-    return [u.name, u.org, u.title, u.cohort + '기', c.email].join(' ').toLowerCase().includes(q);
-  }).sort((a, b) => (a.status === b.status ? 0 : a.status === 'hidden' ? -1 : 1) || a.cohort - b.cohort || a.name.localeCompare(b.name, 'ko'));
+    return [u.name, u.org, u.title, cohortLabel(u), TYPES[u.type], c.email, c.phone].join(' ').toLowerCase().includes(q);
+  }).sort((a, b) => (a.status === b.status ? 0 : a.status === 'hidden' ? -1 : 1) || orderKey(a) - orderKey(b) || a.name.localeCompare(b.name, 'ko'));
   box.innerHTML = L.length ? L.slice(0, 300).map(u => {
     const c = S.allContacts[u.uid] || {};
     return `<div class="arow">
@@ -498,52 +510,75 @@ const squash = s => String(s || '').replace(/\s+/g, '').toLowerCase();
 const keyOf = (dict, label) => Object.keys(dict).find(k => squash(dict[k]) === squash(label)) || null;
 const truthy = v => /^(true|o|y|yes|예|승인|v|✓|✔|1|☑)$/i.test(String(v || '').trim());
 
+// 응답 시트 한 줄 → 프로필. google-form/sync.gs 의 parseRow_ 와 같은 규칙입니다.
+// cell(k): 열 제목 키 k 의 값(앞뒤 공백 제거)
+function parseRow(cell) {
+  const errs = [];
+  const email = api.normEmail(cell('email'));
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errs.push('이메일 주소 형식 오류');
+  const type = keyOf(TYPES, cell('type'));
+  if (!type) errs.push(`구분 ‘${cell('type')}’ 확인 필요`);
+  const name = cell('name');
+  if (!name) errs.push('이름 없음'); else if (name.length > 20) errs.push('이름이 20자를 넘음');
+  let year = null, cohort = null;
+  if (type && type !== 'conf') {
+    const y = cell('year');
+    if (/^\d{4}$/.test(y) && +y >= YEAR_MIN && +y <= YEAR_MAX) year = +y; else errs.push(`입학 연도 ‘${y}’ 확인 필요`);
+    const c = cell('cohort').replace(/기$/, '');
+    if (c) { if (/^\d{1,2}$/.test(c) && +c >= 1 && +c <= COHORT_MAX) cohort = +c; else errs.push(`기수 ‘${c}’ 확인 필요`); }
+  }
+  const thesis = type === 'grad' ? cell('thesis').slice(0, THESIS_LEN) : '';
+  const org = cell('org').slice(0, 40), title = cell('title').slice(0, 40);
+  if (!org) errs.push('회사·소속 없음');
+  if (!title) errs.push('직무·직책 없음');
+  const industry = keyOf(IND, cell('industry'));
+  if (!industry) errs.push(`업종 ‘${cell('industry')}’ 확인 필요`);
+  // 체크박스 + '기타' 직접 입력: 목록에 있는 글은 키로, 나머지는 기타 글로
+  const pick = (k, dict) => {
+    const keys = [], etc = [];
+    cell(k).split(/\s*,\s*/).filter(Boolean).forEach(lab => {
+      const key = keyOf(dict, lab);
+      if (key && key !== 'etc') { if (!keys.includes(key)) keys.push(key); }
+      else if (!key) etc.push(lab);
+    });
+    return { keys: keys.slice(0, MAX_PICK), etc: etc.join(', ').slice(0, ETC_LEN) };
+  };
+  const fn = pick('fn', FN), offer = pick('offer', HELP), need = pick('need', HELP);
+  if (!fn.keys.length && !fn.etc) errs.push('직무 분야 없음');
+  const years = keyOf(YEARS, cell('years'));
+  if (!years) errs.push(`총 경력 연차 ‘${cell('years')}’ 확인 필요`);
+  const career = cell('career').split(/\r?\n/).map(x => x.trim().slice(0, CAREER_LEN)).filter(Boolean).slice(0, MAX_CAREER);
+  const intro = cell('intro').slice(0, 60);
+  if (!cell('agreeMap').includes(AGREE)) errs.push('공개 동의 없음');
+  if (!cell('agreePriv').includes(AGREE)) errs.push('개인정보 동의 없음');
+  let phone = cell('phone').slice(0, 20);
+  if (/^1\d{8,9}$/.test(phone)) phone = '0' + phone; // 시트가 앞자리 0을 지운 경우
+  return {
+    errs, email, name, type, year, cohort,
+    profile: { name, type, year, cohort, thesis, org, title, industry, fn: fn.keys, fnEtc: fn.etc, years, career,
+      offer: offer.keys, offerEtc: offer.etc, need: need.keys, needEtc: need.etc, intro },
+    contact: { email, phone }
+  };
+}
+
 async function buildImport(text, opts) {
   const table = parseTable(text);
   if (table.length < 2) return { fatal: '머리글 행과 응답이 함께 들어 있는지 확인해 주세요.' };
   const head = table[0].map(h => String(h).trim());
   const idx = {};
   Object.entries(COL).forEach(([k, title]) => { const i = head.findIndex(h => squash(h) === squash(title)); if (i >= 0) idx[k] = i; });
-  const required = ['name', 'type', 'cohort', 'email', 'org', 'title', 'industry', 'fn', 'years'];
+  if (idx.email == null) { const i = head.findIndex(h => /^(email address|이메일)$/i.test(h.trim())); if (i >= 0) idx.email = i; }
+  const required = ['email', 'type', 'name', 'org', 'title', 'industry', 'fn', 'years', 'agreeMap', 'agreePriv'];
   const missing = required.filter(k => idx[k] == null).map(k => COL[k]);
   if (missing.length) return { fatal: `시트에서 이 열을 찾지 못했습니다: ${missing.join(', ')}. 질문 제목이 바뀌었는지 확인해 주세요.` };
   const hasApprove = idx.approve != null;
-  const cell = (r, k) => idx[k] == null ? '' : String(r[idx[k]] ?? '').trim();
-  const multi = (r, k, errs) => {
-    const raw = cell(r, k); if (!raw) return [];
-    const keys = [];
-    raw.split(/\s*,\s*/).filter(Boolean).forEach(lab => { const key = keyOf(HELP, lab); if (key) { if (!keys.includes(key)) keys.push(key); } else errs.push(`${COL[k]}: ‘${lab}’은(는) 목록에 없음`); });
-    if (keys.length > MAX_PICK) errs.push(`${COL[k]}: ${MAX_PICK}개까지만 고를 수 있음`);
-    return keys.slice(0, MAX_PICK);
-  };
   const rows = [];
   for (let n = 1; n < table.length; n++) {
-    const r = table[n], errs = [];
-    const email = api.normEmail(cell(r, 'email'));
-    const name = cell(r, 'name'), cohortRaw = cell(r, 'cohort').replace(/기$/, ''), cohort = parseInt(cohortRaw, 10);
-    if (!name) errs.push('이름 없음'); else if (name.length > 20) errs.push('이름이 20자를 넘음');
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errs.push('로그인 이메일 형식 오류');
-    if (!/^\d{1,2}$/.test(cohortRaw) || cohort < 1 || cohort > 80) errs.push('기수 오류');
-    const org = cell(r, 'org').slice(0, 40), title = cell(r, 'title').slice(0, 40);
-    if (!org) errs.push('회사·소속 없음');
-    if (!title) errs.push('직무·직책 없음');
-    const industry = keyOf(IND, cell(r, 'industry')), fn = keyOf(FN, cell(r, 'fn'));
-    if (!industry) errs.push(`업종 ‘${cell(r, 'industry')}’ 확인 필요`);
-    if (!fn) errs.push(`직무 분야 ‘${cell(r, 'fn')}’ 확인 필요`);
-    const type = keyOf(TYPES, cell(r, 'type')), years = keyOf(YEARS, cell(r, 'years'));
-    if (!type) errs.push(`구분 ‘${cell(r, 'type')}’ 확인 필요`);
-    if (!years) errs.push(`총 경력 연차 ‘${cell(r, 'years')}’ 확인 필요`);
-    const career = cell(r, 'career').split(/\r?\n/).map(s => s.trim().slice(0, CAREER_LEN)).filter(Boolean).slice(0, MAX_CAREER);
-    const thesis = cell(r, 'thesis').slice(0, THESIS_LEN);
-    const offer = multi(r, 'offer', errs), need = multi(r, 'need', errs);
-    if (idx.agreeMap != null && !cell(r, 'agreeMap').includes(AGREE)) errs.push('명부 공개 동의 없음');
-    if (idx.agreePriv != null && !cell(r, 'agreePriv').includes(AGREE)) errs.push('개인정보 동의 없음');
-    let phone = cell(r, 'phone').slice(0, 20);
-    if (/^1\d{8,9}$/.test(phone)) phone = '0' + phone; // 시트가 앞자리 0을 지운 경우
-    const share = squash(cell(r, 'share')) === squash(SHARE_YES);
-    const intro = cell(r, 'intro').slice(0, 60);
-    rows.push({ line: n + 1, name, cohort, email, approved: hasApprove ? truthy(cell(r, 'approve')) : true, errs,
-      profile: { name, type, cohort, industry, fn, org, title, years, career, thesis, offer, need, intro }, contact: { email, phone, share } });
+    const r = table[n];
+    const cell = k => idx[k] == null ? '' : String(r[idx[k]] ?? '').trim();
+    if (!cell('email') && !cell('name')) continue; // 체크박스만 있는 빈 줄
+    const x = parseRow(cell);
+    rows.push({ line: n + 1, ...x, approved: hasApprove ? truthy(cell('approve')) : true });
   }
   await Promise.all(rows.map(async r => { r.mid = r.errs.length && !r.email.includes('@') ? null : await api.memberId(r.email); }));
   // 같은 이메일이 여러 번이면 마지막 응답을 씀
@@ -581,8 +616,8 @@ function impHTML(imp) {
     </div>
     ${imp.hasApprove ? '' : '<p class="hint">시트에 ‘승인’ 열이 없어 오류 없는 모든 응답을 등록 대상으로 봤습니다.</p>'}
     <div class="imp-table"><table>
-      <thead><tr><th scope="col">행</th><th scope="col">이름</th><th scope="col">기수</th><th scope="col">로그인 이메일</th><th scope="col">처리</th></tr></thead>
-      <tbody>${rows.map(r => `<tr class="${ACT[r.action][1]}"><td class="num">${r.line}</td><td>${esc(r.name || '—')}</td><td class="num">${Number.isFinite(r.cohort) ? r.cohort + '기' : '—'}</td><td>${esc(r.email || '—')}</td><td>${ACT[r.action][0]}${r.errs.length ? `<small>${esc(r.errs.join(' · '))}</small>` : ''}</td></tr>`).join('')}</tbody>
+      <thead><tr><th scope="col">행</th><th scope="col">이름</th><th scope="col">구분</th><th scope="col">로그인 이메일</th><th scope="col">처리</th></tr></thead>
+      <tbody>${rows.map(r => `<tr class="${ACT[r.action][1]}"><td class="num">${r.line}</td><td>${esc(r.name || '—')}</td><td>${r.type ? esc(cohortLabel(r.profile)) : '—'}</td><td>${esc(r.email || '—')}</td><td>${ACT[r.action][0]}${r.errs.length ? `<small>${esc(r.errs.join(' · '))}</small>` : ''}</td></tr>`).join('')}</tbody>
     </table></div>
     <div class="row-btns">${go ? `<button class="btn btn-primary" data-act="imp-run">${go}명 명부에 올리기</button>` : '<span class="muted">등록할 응답이 없습니다.</span>'}<button class="btn btn-ghost" data-act="imp-clear">지우기</button></div>`;
 }
@@ -606,7 +641,7 @@ function profileHTML(u) {
   const self = u.uid === S.mid;
   const syn = self ? null : synergy(S.member, u);
   return `<div class="pm-head">
-    <p class="dtop"><span>${esc(IND[u.industry] || '')} · ${esc(FN[u.fn] || '')}</span><span class="coh">${esc(cohortLabel(u))}</span></p>
+    <p class="dtop"><span>${esc(IND[u.industry] || '')} · ${esc(fnText(u))}</span><span class="coh">${esc(cohortLabel(u))}</span></p>
     <h2>${esc(u.name)}${self ? '<span class="me-tag">나</span>' : ''}</h2>
     <p class="drole">${esc(u.org)} · ${esc(u.title)}${yearsLabel(u) ? ` · ${esc(yearsLabel(u))}` : ''}</p>
   </div>
@@ -614,30 +649,24 @@ function profileHTML(u) {
   <dl class="kv">
     <dt>주요 경력</dt><dd>${careerHTML(u)}</dd>
     ${u.thesis ? `<dt>학위논문</dt><dd>${esc(u.thesis)}</dd>` : ''}
-    <dt>줄 수 있는 것</dt><dd>${tags(u.offer)}</dd><dt>필요한 것</dt><dd>${tags(u.need)}</dd>
+    <dt>줄 수 있는 것</dt><dd>${tags(offerLabels(u))}</dd><dt>필요한 것</dt><dd>${tags(needLabels(u))}</dd>
   </dl>
   ${self ? '' : `<div class="rel"><p class="rel-h">나와의 시너지</p>
-    ${syn.reasons.length ? whyList(syn.reasons) : '<p>아직 겹치는 점은 없습니다. 같은 기수나 관심사로 먼저 인사해 보세요.</p>'}
+    ${syn.reasons.length ? whyList(syn.reasons) : '<p>아직 겹치는 점은 없습니다. 관심사로 먼저 인사해 보세요.</p>'}
   </div>`}
-  <div class="contact" data-contact="${u.uid}"><span class="muted">연락처 확인 중</span></div>
+  <div class="contact" data-contact="${u.uid}"><span class="muted">이메일 불러오는 중</span></div>
   <div class="row-btns"><a class="btn btn-ghost" href="#/net" data-act="map-of" data-id="${u.uid}">지도에서 보기</a>${introCTA(u)}</div>`;
 }
-// 운영진은 규칙상 모든 연락처를 읽을 수 있지만, 일반 화면에서는 동문과 같은 기준으로만 보여줍니다.
-function contactVisible(id, c) {
-  if (!c) return false;
-  if (id === S.mid || c.share) return true;
-  return S.intros.sent.some(i => i.to === id && i.status === 'accepted')
-    || S.intros.received.some(i => i.from === id && i.status === 'accepted');
-}
-function contactHTML(c, visible) {
-  if (!c || !visible) return '<span class="mini">연락처</span><span class="muted">비공개 · 소개 요청이 수락되면 서로 공개됩니다</span>';
-  return `<span class="mini">연락처</span><code>${esc(c.email)}</code>${c.phone ? `<code>${esc(c.phone)}</code>` : ''}<button class="btn btn-ghost btn-sm" data-act="copy" data-text="${esc(c.email)}">이메일 복사</button>`;
+// 라운지 이용자끼리는 이메일만 보입니다(휴대폰은 운영진만).
+function contactHTML(c) {
+  if (!c || !c.email) return '<span class="mini">이메일</span><span class="muted">불러오지 못했습니다</span>';
+  return `<span class="mini">이메일</span><code>${esc(c.email)}</code><button class="btn btn-ghost btn-sm" data-act="copy" data-text="${esc(c.email)}">이메일 복사</button>`;
 }
 async function fillContacts(scope) {
   const boxes = [...scope.querySelectorAll('[data-contact]')];
   await Promise.all(boxes.map(async b => {
-    const id = b.dataset.contact, c = await api.getContact(id);
-    if (document.contains(b)) b.innerHTML = contactHTML(c, contactVisible(id, c));
+    const c = await api.getContact(b.dataset.contact);
+    if (document.contains(b)) b.innerHTML = contactHTML(c);
   }));
 }
 function openProfile(id) {
@@ -651,15 +680,16 @@ function openIntro(id) {
   if (!u || id === S.mid) return;
   const me = S.member, h = helps(u, me), g = helps(me, u);
   const R = synergy(me, u).reasons, has = k => R.find(x => x.k === k);
-  const why = h.length ? `${HELP[h[0]]} 쪽으로 조언을 듣고 싶어서 연락드립니다.`
-    : g.length ? `${HELP[g[0]]} 쪽으로 도움을 드릴 수 있을 것 같아 연락드립니다.`
+  const why = h.length ? `${helpLabel(h[0])} 쪽으로 조언을 듣고 싶어서 연락드립니다.`
+    : g.length ? `${helpLabel(g[0])} 쪽으로 도움을 드릴 수 있을 것 같아 연락드립니다.`
     : has('co') ? `${has('co').t.replace('같은 회사 출신 · ', '')}을(를) 거친 인연이 반가워 연락드립니다.`
     : has('ind') ? `같은 ${IND[u.industry]} 업계에 계셔서 인사드리고 싶어 연락드립니다.`
     : has('thesis') ? '논문 주제가 비슷해서 이야기 나눠 보고 싶어 연락드립니다.'
     : '라운지에서 프로필을 보고 인사드리고 싶어 연락드립니다.';
-  const msg = `안녕하세요, ${me.cohort}기 ${me.name}입니다. ${why} 편하실 때 짧게 통화나 커피 한잔 가능할까요?`;
-  openModal(`<div class="pm-head"><h2>${esc(u.name)} 동문에게 소개 요청</h2></div>
-    <p class="hint">상대가 수락하면 두 사람의 연락처가 서로에게 공개됩니다. 상대는 다음에 라운지에 들어올 때 요청을 보게 됩니다.</p>
+  const who = me.type === 'conf' ? `${me.org} ${me.name}` : `${cohortLabel(me)} ${me.name}`;
+  const msg = `안녕하세요, ${who}입니다. ${why} 편하실 때 짧게 통화나 커피 한잔 가능할까요?`;
+  openModal(`<div class="pm-head"><h2>${esc(u.name)} 님에게 소개 요청</h2></div>
+    <p class="hint">상대는 다음에 라운지에 들어올 때 요청을 보게 됩니다. 급하면 프로필에 있는 이메일로 바로 연락해도 됩니다.</p>
     <div class="field"><label for="intro-msg">보낼 메시지 <small>최대 500자</small></label><textarea id="intro-msg" rows="5" maxlength="500">${esc(msg)}</textarea><p class="ferr" id="intro-err" role="alert"></p></div>
     <div class="row-btns"><button class="btn btn-primary" data-act="send-intro" data-id="${id}">요청 보내기</button><button class="btn btn-ghost" data-act="close">취소</button></div>`);
 }
@@ -674,7 +704,7 @@ function openWithdraw() {
 }
 
 /* ---------- 상단 바와 이동 ---------- */
-const NAV = [['net', '네트워크 지도'], ['match', '시너지 추천'], ['dir', '동문 명부'], ['intros', '소개 요청'], ['me', '내 프로필']];
+const NAV = [['net', '네트워크 지도'], ['match', '시너지 추천'], ['dir', '명부'], ['intros', '소개 요청'], ['me', '내 프로필']];
 const APPROVED_VIEWS = ['net', 'match', 'dir', 'intros', 'me', 'admin'];
 const approved = () => !!(S.member && S.member.status === 'approved');
 function renderBar() {
@@ -735,15 +765,19 @@ async function fillMyContact() {
   const box = document.querySelector('[data-mycontact]'); if (!box) return;
   const c = await api.getContact(S.mid);
   if (!document.contains(box)) return;
-  box.innerHTML = c ? `${esc(c.email)}${c.phone ? ' · ' + esc(c.phone) : ''} <span class="badge ${c.share ? 'ok' : ''}">${c.share ? '동문에게 공개' : '소개 수락 시에만 공개'}</span>` : '<span class="muted">정보 없음</span>';
+  box.innerHTML = c ? `${esc(c.email)} <span class="badge ok">라운지 이용자에게 공개</span>` : '<span class="muted">정보 없음</span>';
+  const pb = document.querySelector('[data-myphone]');
+  if (pb) { const ph = await api.getPhone(S.mid); if (document.contains(pb)) pb.innerHTML = `${ph ? esc(ph) : '<span class="muted">비어 있음</span>'} <span class="badge">운영진만 봄</span>`; }
 }
 
 /* ---------- 로그인 상태에 따라 길 안내 ---------- */
 function formFromMember(m, c) {
   const cr = careerList(m);
-  return { name: m.name, type: m.type || 'grad', cohort: String(m.cohort), thesis: m.thesis || '', org: m.org, title: m.title, industry: m.industry, fn: m.fn,
+  return { name: m.name, type: m.type || 'grad', year: m.year ? String(m.year) : '', cohort: m.cohort ? String(m.cohort) : '', thesis: m.thesis || '',
+    org: m.org, title: m.title, industry: m.industry, fn: fnsOf(m).filter(k => k !== 'etc'), fnEtc: m.fnEtc || '',
     years: m.years || '', career0: cr[0] || '', career1: cr[1] || '', career2: cr[2] || '',
-    offer: (m.offer || []).slice(), need: (m.need || []).slice(), intro: m.intro || '', phone: (c && c.phone) || '', share: !!(c && c.share) };
+    offer: (m.offer || []).slice(), offerEtc: m.offerEtc || '', need: (m.need || []).slice(), needEtc: m.needEtc || '',
+    intro: m.intro || '', phone: c || '' };
 }
 
 async function onAuth(u) {
@@ -792,6 +826,7 @@ function pick(b) {
   if (g.dataset.single) {
     f[k] = v;
     g.querySelectorAll('.pick').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.val === v)));
+    if (k === 'type') { $('#app').innerHTML = V.form(); const t = document.querySelector(`#pf [data-group="type"] [data-val="${v}"]`); if (t) t.focus(); return; }
   } else {
     const arr = f[k], i = arr.indexOf(v), max = +g.dataset.max;
     if (i >= 0) arr.splice(i, 1);
@@ -802,18 +837,22 @@ function pick(b) {
   setErr(k, ''); g.setAttribute('aria-invalid', 'false');
 }
 async function submitProfile() {
-  const f = S.form, E = {};
-  const cohortStr = String(f.cohort).trim(), c = parseInt(cohortStr, 10);
+  const f = S.form, E = {}, conf = f.type === 'conf';
+  const yStr = String(f.year || '').trim(), cStr = String(f.cohort || '').trim();
+  const year = parseInt(yStr, 10), cohort = parseInt(cStr, 10);
+  const fnEtc = String(f.fnEtc || '').trim().slice(0, ETC_LEN);
+  if (!TYPES[f.type]) E.type = '구분을 골라 주세요.';
   if (!f.name.trim()) E.name = '이름을 적어 주세요.';
-  if (!/^\d{1,2}$/.test(cohortStr) || c < 1 || c > 80) E.cohort = '기수를 숫자로 적어 주세요.';
+  if (!conf && !(/^\d{4}$/.test(yStr) && year >= YEAR_MIN && year <= YEAR_MAX)) E.year = `입학 연도를 ${YEAR_MIN}–${YEAR_MAX} 사이 네 자리로 적어 주세요.`;
+  if (!conf && cStr && !(/^\d{1,2}$/.test(cStr) && cohort >= 1 && cohort <= COHORT_MAX)) E.cohort = '기수는 숫자로 적거나 비워 두세요.';
   if (!f.org.trim()) E.org = '회사나 소속을 적어 주세요.';
   if (!f.title.trim()) E.title = '직무나 직책을 적어 주세요.';
   if (!f.industry) E.industry = '업종을 하나 골라 주세요.';
-  if (!f.fn) E.fn = '직무 분야를 하나 골라 주세요.';
-  if (!TYPES[f.type]) E.type = '졸업생인지 재학생인지 골라 주세요.';
+  if (!f.fn.length && !fnEtc) E.fn = '직무 분야를 하나 이상 고르거나 기타에 적어 주세요.';
+  else if (f.fn.length + (fnEtc ? 1 : 0) > MAX_PICK) E.fn = `직무 분야는 기타를 합쳐 ${MAX_PICK}개까지입니다.`;
   if (!YEARS[f.years]) E.years = '총 경력 연차를 골라 주세요.';
-  if (f.phone.trim() && !/^[0-9+\-\s()]{7,20}$/.test(f.phone.trim())) E.phone = '숫자와 하이픈으로 적어 주세요.';
-  ['name', 'cohort', 'type', 'org', 'title', 'industry', 'fn', 'years', 'phone'].forEach(k => {
+  if (f.phone.trim() && !/^[0-9+\-\s()]{9,20}$/.test(f.phone.trim())) E.phone = '숫자와 하이픈으로 적어 주세요.';
+  ['type', 'name', 'year', 'cohort', 'org', 'title', 'industry', 'fn', 'years', 'phone'].forEach(k => {
     setErr(k, E[k] || '');
     const t = document.querySelector(`#pf [data-key="${k}"]`); if (t) t.setAttribute('aria-invalid', E[k] ? 'true' : 'false');
   });
@@ -821,14 +860,18 @@ async function submitProfile() {
   $('#err-sum').textContent = n ? `${n}개 항목을 확인해 주세요.` : '';
   if (n) { const first = document.querySelector('#pf [aria-invalid="true"]'); if (first) { first.focus(); first.scrollIntoView({ block: 'center' }); } return; }
 
-  const career = [f.career0, f.career1, f.career2].map(s => String(s || '').trim().slice(0, CAREER_LEN)).filter(Boolean).slice(0, MAX_CAREER);
-  const profile = { name: f.name.trim(), type: f.type, cohort: c, industry: f.industry, fn: f.fn, org: f.org.trim(), title: f.title.trim(),
-    years: f.years, career, thesis: String(f.thesis || '').trim().slice(0, THESIS_LEN),
-    offer: f.offer.slice(), need: f.need.slice(), intro: f.intro.trim() };
+  const etc = v => etcList(String(v || '')).join(', ').slice(0, ETC_LEN);
+  const career = [f.career0, f.career1, f.career2].map(x => String(x || '').trim().slice(0, CAREER_LEN)).filter(Boolean).slice(0, MAX_CAREER);
+  const profile = {
+    name: f.name.trim(), type: f.type, year: conf ? null : year, cohort: conf || !cStr ? null : cohort,
+    thesis: f.type === 'grad' ? String(f.thesis || '').trim().slice(0, THESIS_LEN) : '',
+    org: f.org.trim(), title: f.title.trim(), industry: f.industry, fn: f.fn.slice(0, MAX_PICK), fnEtc,
+    years: f.years, career, offer: f.offer.slice(), offerEtc: etc(f.offerEtc), need: f.need.slice(), needEtc: etc(f.needEtc), intro: f.intro.trim()
+  };
   const btn = $('#pf-submit');
   busy(btn, true, '저장하는 중…');
   try {
-    await api.saveProfile(S.mid, profile, { phone: f.phone.trim(), share: !!f.share });
+    await api.saveProfile(S.mid, profile, f.phone.trim());
     S.form = null;
     Object.assign(S.member, profile);
     const i = S.members.findIndex(x => x.uid === S.mid); if (i >= 0) Object.assign(S.members[i], profile);
@@ -844,12 +887,12 @@ async function submitProfile() {
 /* ---------- 백업 ---------- */
 function downloadCSV() {
   const cell = v => { let s = String(v ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
-  const head = ['이름', '구분', '기수', '상태', '업종', '직무 분야', '회사·소속', '직무·직책', '총 경력 연차', '주요 경력', '학위논문 제목', '줄 수 있는 것', '필요한 것', '한 줄 소개', '로그인 이메일', '휴대폰', '연락처 공개', '동의 버전', '등록일'];
+  const head = ['이름', '구분', '입학 연도', '기수', '상태', '업종', '직무 분야', '회사·소속', '직무·직책', '총 경력 연차', '주요 경력', '학위논문 제목', '줄 수 있는 것', '필요한 것', '한 줄 소개', '로그인 이메일', '휴대폰', '동의 버전', '등록일'];
   const st = { approved: '명부', hidden: '내림' };
   const d = ts => (ts && ts.toDate ? ts.toDate().toISOString().slice(0, 10) : '');
-  const lines = S.all.slice().sort((a, b) => a.cohort - b.cohort).map(r => { const c = S.allContacts[r.uid] || {}; return [r.name, TYPES[r.type] || '', r.cohort, st[r.status] || r.status, IND[r.industry], FN[r.fn], r.org, r.title,
+  const lines = S.all.slice().sort((a, b) => orderKey(a) - orderKey(b)).map(r => { const c = S.allContacts[r.uid] || {}; return [r.name, TYPES[r.type] || '', r.year || '', r.cohort || '', st[r.status] || r.status, IND[r.industry], fnText(r), r.org, r.title,
     YEARS[r.years] || '', careerList(r).join(' / '), r.thesis || '',
-    labels(r.offer).join(', '), labels(r.need).join(', '), r.intro, c.email, c.phone, c.share ? '공개' : '비공개', c.consent ? c.consent.version : '', d(r.createdAt)].map(cell).join(','); });
+    offerLabels(r).join(', '), needLabels(r).join(', '), r.intro, c.email, c.phone, c.consent ? c.consent.version : '', d(r.createdAt)].map(cell).join(','); });
   const blob = new Blob(['﻿' + [head.map(cell).join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -885,8 +928,8 @@ document.addEventListener('click', async e => {
       case 'logout': await api.logout(); break;
       case 'pick': pick(b); break;
       case 'edit-profile': {
-        const c = await api.getContact(S.mid);
-        S.form = formFromMember(S.member, c); show('form');
+        const ph = await api.getPhone(S.mid);
+        S.form = formFromMember(S.member, ph); show('form');
         break;
       }
       case 'cancel-edit': S.form = null; nav('me'); break;
@@ -917,13 +960,13 @@ document.addEventListener('click', async e => {
         const u = S.members.find(x => x.uid === id);
         closeModal();
         if (S.view === 'match') show('match');
-        toast(`${u ? u.name : ''} 동문에게 소개 요청을 보냈습니다. 상대가 수락하면 연락처가 서로 공개됩니다.`);
+        toast(`${u ? u.name : ''} 님에게 소개 요청을 보냈습니다. 상대가 다음에 라운지에 들어오면 볼 수 있어요.`);
         break;
       }
       case 'accept': case 'decline': {
         busy(b, true);
         await api.respondIntro(id, a === 'accept' ? 'accepted' : 'declined');
-        toast(a === 'accept' ? '수락했습니다. 이제 서로의 연락처가 보입니다.' : '요청을 거절했습니다.');
+        toast(a === 'accept' ? '수락했습니다. 이메일로 이야기를 이어 가 보세요.' : '요청을 거절했습니다.');
         show('intros');
         break;
       }

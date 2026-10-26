@@ -79,14 +79,18 @@ export function watchMember(mid, cb, onError) {
   }, onError);
 }
 
-const PROFILE_KEYS = ['name', 'type', 'cohort', 'industry', 'fn', 'org', 'title', 'years', 'career', 'thesis', 'offer', 'need', 'intro'];
+export const PROFILE_KEYS = ['name', 'type', 'year', 'cohort', 'thesis', 'org', 'title', 'industry', 'fn', 'fnEtc', 'years', 'career', 'offer', 'offerEtc', 'need', 'needEtc', 'intro'];
 const pickProfile = p => Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k]]));
 
-export async function saveProfile(mid, profile, contact) {
+// 프로필과 휴대폰(운영진만 보는 곳)을 함께 저장
+export async function saveProfile(mid, profile, phone) {
   const b = writeBatch(db);
   b.update(doc(db, 'members', mid), { ...pickProfile(profile), updatedAt: serverTimestamp() });
-  b.update(doc(db, 'contacts', mid), { phone: contact.phone || '', share: !!contact.share });
+  b.set(doc(db, 'private', mid), { phone: phone || '' }, { merge: true });
   await b.commit();
+}
+export async function getPhone(mid) {
+  try { const s = await getDoc(doc(db, 'private', mid)); return s.exists() ? s.data().phone || '' : ''; } catch { return ''; }
 }
 
 /* ---------- 동문 목록·연락처 ---------- */
@@ -94,7 +98,7 @@ const rows = snap => snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 export const listApproved = async () =>
   rows(await getDocs(query(collection(db, 'members'), where('status', '==', 'approved'))));
 
-// 공개를 허락했거나 소개 요청이 수락된 경우에만 읽힙니다(운영진은 전부). 아니면 null.
+// 명부에 오른 이용자끼리는 이메일이 보입니다. 읽을 수 없으면 null.
 export async function getContact(mid) {
   try {
     const s = await getDoc(doc(db, 'contacts', mid));
@@ -109,7 +113,7 @@ export async function sendIntro(me, toMid, message) {
   const ex = await getDoc(ref);
   if (ex.exists()) throw Object.assign(new Error('exists'), { code: 'intro/exists' });
   await setDoc(ref, {
-    from: me.uid, to: toMid, fromName: me.name, fromCohort: me.cohort,
+    from: me.uid, to: toMid, fromName: me.name, fromCohort: me.cohort ?? null,
     message, status: 'pending', createdAt: serverTimestamp()
   });
 }
@@ -128,24 +132,25 @@ export const removeIntro = id => deleteDoc(doc(db, 'intros', id));
 
 /* ---------- 운영진 ---------- */
 export async function loadAdminData() {
-  const [m, c, w] = await Promise.all([
-    getDocs(collection(db, 'members')), getDocs(collection(db, 'contacts')), getDocs(collection(db, 'withdrawn'))
+  const [m, c, p, w] = await Promise.all([
+    getDocs(collection(db, 'members')), getDocs(collection(db, 'contacts')), getDocs(collection(db, 'private')), getDocs(collection(db, 'withdrawn'))
   ]);
+  const phones = Object.fromEntries(p.docs.map(d => [d.id, d.data().phone || '']));
   return {
     members: rows(m),
-    contacts: Object.fromEntries(c.docs.map(d => [d.id, d.data()])),
+    contacts: Object.fromEntries(c.docs.map(d => [d.id, { ...d.data(), phone: phones[d.id] || '' }])),
     withdrawn: new Set(w.docs.map(d => d.id))
   };
 }
 export const setStatus = (mid, status) =>
   updateDoc(doc(db, 'members', mid), { status, updatedAt: serverTimestamp() });
 
-// 신청서 가져오기. items: [{ mid, profile, contact:{email,phone,share}, existing, rejoin }]
+// 신청서 직접 가져오기. items: [{ mid, profile, contact:{email,phone}, existing, rejoin }]
 export async function importMembers(items, onProgress) {
   let done = 0;
-  for (let i = 0; i < items.length; i += 150) {
+  for (let i = 0; i < items.length; i += 120) {
     const b = writeBatch(db);
-    items.slice(i, i + 150).forEach(it => {
+    items.slice(i, i + 120).forEach(it => {
       b.set(doc(db, 'members', it.mid), {
         ...pickProfile(it.profile),
         status: it.existing ? it.existing.status : 'approved',
@@ -153,13 +158,14 @@ export async function importMembers(items, onProgress) {
         updatedAt: serverTimestamp()
       });
       b.set(doc(db, 'contacts', it.mid), {
-        email: normEmail(it.contact.email), phone: it.contact.phone || '', share: !!it.contact.share,
+        email: normEmail(it.contact.email),
         consent: { map: true, privacy: true, version: POLICY_VERSION, at: serverTimestamp(), via: 'google-form' }
       });
+      b.set(doc(db, 'private', it.mid), { phone: it.contact.phone || '' });
       if (it.rejoin) b.delete(doc(db, 'withdrawn', it.mid));
     });
     await b.commit();
-    done = Math.min(items.length, i + 150);
+    done = Math.min(items.length, i + 120);
     if (onProgress) onProgress(done, items.length);
   }
 }
@@ -177,6 +183,7 @@ export async function withdraw(mid) {
   const b = writeBatch(db);
   [...received, ...sent].forEach(i => b.delete(doc(db, 'intros', i.id)));
   b.delete(doc(db, 'contacts', mid));
+  b.delete(doc(db, 'private', mid));
   b.delete(doc(db, 'members', mid));
   b.set(doc(db, 'withdrawn', mid), { at: serverTimestamp() });
   await b.commit();

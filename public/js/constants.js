@@ -44,7 +44,8 @@ export const HELPS = {
 
 export const TYPES = {
   grad: '졸업생',
-  student: '재학생'
+  student: '재학생',
+  conf: '학술회 참가자'
 };
 
 export const YEARS = {
@@ -59,15 +60,19 @@ export const MAX_PICK = 3;
 export const MAX_CAREER = 3;      // 주요 경력 줄 수
 export const CAREER_LEN = 60;     // 경력 한 줄 글자 수
 export const THESIS_LEN = 100;    // 논문 제목 글자 수
+export const ETC_LEN = 60;        // '기타' 직접 입력 글자 수
+export const YEAR_MIN = 1995, YEAR_MAX = 2030; // 입학 연도 범위
+export const COHORT_MAX = 99;
 
-// 구글 폼 질문 제목 = 응답 시트의 머리글. 운영진 화면의 '신청서 가져오기'가 이 제목으로 열을 찾습니다.
-// google-form/create_form.gs 의 질문 제목과 같아야 합니다.
+// 구글 폼 질문 제목 = 응답 시트의 머리글. 자동 연동과 운영진 화면의 '신청서 직접 가져오기'가 이 제목으로 열을 찾습니다.
+// google-form/create_form.gs, google-form/sync.gs 의 질문 제목과 같아야 합니다.
 export const FORM_COLUMNS = {
-  name: '이름',
+  email: '이메일 주소',          // 구글 로그인 계정 이메일(폼이 자동 수집)
   type: '구분',
-  cohort: '기수',
+  name: '이름',
   thesis: '학위논문 제목',
-  email: '라운지 로그인 이메일',
+  year: '입학 연도',
+  cohort: '기수',
   org: '회사·소속',
   title: '직무·직책',
   industry: '업종',
@@ -78,12 +83,9 @@ export const FORM_COLUMNS = {
   need: '내가 필요한 것',
   intro: '한 줄 소개',
   phone: '휴대폰',
-  share: '연락처 공개',
-  agreeMap: '명부 공개 동의',
+  agreeMap: '공개 동의',
   agreePriv: '개인정보 수집·이용 동의',
   approve: '승인',
   synced: '라운지 반영'
 };
-export const SHARE_YES = '승인된 동문에게 공개';
-export const SHARE_NO = '소개 요청을 수락한 동문에게만 공개';
 export const AGREE = '동의합니다';

@@ -1,11 +1,14 @@
 // 네트워크 지도 (캔버스)
-// 승인된 동문을 점으로, "한쪽이 필요한 것을 다른 쪽이 줄 수 있는" 관계를 선으로 그립니다.
+// 명부에 오른 사람(동문·학술회 참가자)을 점으로, "한쪽이 필요한 것을 다른 쪽이 줄 수 있는" 관계를 선으로 그립니다.
 // d3(전역)는 index.html 에서 먼저 불러옵니다.
+
+import { offersOf, needsOf, fnsOf, fnTokens, fnText, helpLabel, cohortLabel, cohortNum } from './model.js';
 
 const FONT = "'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif";
 const ST = { bg: '#110c0f', ink: '#f1e9e4', node: '#d6c9c4', me: '#f7efea', muted: '#a3949a', amber: '#c98500', spark: '#ffd88f', azure: '#4a8ce6', crimson: '#ff5d79', gold: '#d9b46a', halo: 'rgba(17,12,15,.9)' };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const inter = (a, b) => (a || []).filter(x => (b || []).includes(x));
+const CONF = 'conf';
 const clamp = v => v < 0 ? 0 : v > 1 ? 1 : v;
 const ease = t => 1 - Math.pow(1 - t, 3);
 function rng(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -24,10 +27,12 @@ export function mountNetwork(root, opts) {
   if (!d3) { root.innerHTML = '<p class="hint">지도를 불러오지 못했습니다. 페이지를 새로고침해 주세요.</p>'; return { destroy() {} }; }
   const ac = new AbortController(), on = { signal: ac.signal };
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const H_ = arr => (arr || []).map(k => HELP[k] || k);
+  const H_ = arr => (arr || []).map(helpLabel);
 
   /* ---------- 데이터 ---------- */
-  const people = members.map((m, i) => ({ ...m, id: i, me: m.uid === meUid, offer: m.offer || [], need: m.need || [] }));
+  // offer/need 는 '기타' 글까지 토큰으로, fn 은 묶음용 대표 직무(첫째), fnT 는 비교용 전체, cx 는 기수(추정 포함)
+  const people = members.map((m, i) => ({ ...m, id: i, me: m.uid === meUid, offer: offersOf(m), need: needsOf(m),
+    fn: fnsOf(m)[0] || 'etc', fnT: fnTokens(m), cx: m.type === CONF ? null : cohortNum(m), lab: cohortLabel(m) }));
   const byUid = new Map(people.map(p => [p.uid, p]));
   const helpsOf = (g, t) => inter(g.offer, t.need);
   const score = (g, t) => { const a = helpsOf(g, t).length, b = helpsOf(t, g).length; return a * 2 + b * 1.5 + (b ? 1 : 0) + (g.industry !== t.industry ? .4 : 0) + hash01(g.uid + t.uid) * .3; };
@@ -52,25 +57,26 @@ export function mountNetwork(root, opts) {
   const step = Math.min(.03, .9 / Math.max(1, people.length));
   order.forEach((p, i) => { p.appear = .15 + i * step; });
   const labelAll = people.length <= 40;
-  const cohorts = people.map(p => p.cohort);
+  const cohorts = people.map(p => p.cx).filter(Boolean);
   const cMin = Math.min(1, ...cohorts), cMax = Math.max(2, ...cohorts);
+  const hasConf = people.some(p => p.type === CONF);
 
   /* ---------- 화면 틀 ---------- */
-  root.innerHTML = `<section class="nv-stage" aria-label="동문 네트워크 지도">
+  root.innerHTML = `<section class="nv-stage" aria-label="라운지 네트워크 지도">
     <div class="nv-viz">
-      <canvas class="nv-cv" role="img" aria-label="승인된 동문 ${people.length}명을 점으로, 서로 도울 수 있는 동문을 선으로 이은 지도. 같은 내용을 오른쪽 패널과 동문 명부에서 볼 수 있습니다."></canvas>
+      <canvas class="nv-cv" role="img" aria-label="라운지에 등록된 ${people.length}명을 점으로, 서로 도울 수 있는 사람을 선으로 이은 지도. 같은 내용을 오른쪽 패널과 명부에서 볼 수 있습니다."></canvas>
       <div class="nv-ov nv-top">
         <div class="nv-pills nv-glass" role="group" aria-label="보기 방식">
           <button data-mode="net" aria-pressed="true">연결망</button><button data-mode="industry" aria-pressed="false">업종별</button><button data-mode="fn" aria-pressed="false">직무별</button><button data-mode="cohort" aria-pressed="false">기수순</button>
         </div>
-        <div class="nv-search"><label class="sr-only" for="nv-q">동문 찾기</label><input id="nv-q" class="nv-glass" type="search" placeholder="이름, 회사, 직책으로 찾기" autocomplete="off"><ul class="nv-sugg nv-glass" hidden></ul></div>
+        <div class="nv-search"><label class="sr-only" for="nv-q">사람 찾기</label><input id="nv-q" class="nv-glass" type="search" placeholder="이름, 회사, 직책으로 찾기" autocomplete="off"><ul class="nv-sugg nv-glass" hidden></ul></div>
       </div>
       <div class="nv-ov nv-bot">
         <div class="nv-legend nv-glass" role="group" aria-label="연결선 종류"></div>
         <div class="nv-zoom nv-glass" role="group" aria-label="확대와 축소"><button data-nact="zin" aria-label="확대">+</button><button data-nact="zout" aria-label="축소">−</button><button data-nact="fit" aria-label="전체 보기">⤢</button></div>
       </div>
       <div class="nv-tip nv-glass" hidden></div>
-      ${people.length < 3 ? `<div class="nv-empty nv-glass"><b>아직 승인된 동문이 ${people.length}명이에요</b><span>동문이 늘어날수록 이 지도에 연결이 생깁니다. 아는 동문에게 라운지를 알려 주세요.</span></div>` : ''}
+      ${people.length < 3 ? `<div class="nv-empty nv-glass"><b>아직 등록된 사람이 ${people.length}명이에요</b><span>사람이 늘어날수록 이 지도에 연결이 생깁니다. 동문과 학술회 참가자에게 라운지를 알려 주세요.</span></div>` : ''}
     </div>
     <aside class="nv-panel nv-glass" aria-live="polite"></aside>
   </section>`;
@@ -98,12 +104,14 @@ export function mountNetwork(root, opts) {
         .force('x', d3.forceX(cx).strength(.05))
         .force('y', d3.forceY(cy).strength(.05 * Math.max(1, aw / ah)));
     } else if (S.mode === 'cohort') {
-      const sx = c => x0 + 46 + (c - cMin) / (cMax - cMin) * (aw - 92);
-      sim.force('x', d3.forceX(d => sx(d.cohort)).strength(.55)).force('y', d3.forceY(cy - 14).strength(.06)).force('charge', d3.forceManyBody().strength(-5));
+      const right = hasConf ? 110 : 46;
+      const sx = c => x0 + 46 + (c - cMin) / (cMax - cMin) * (aw - 46 - right);
+      const xConf = x1 - 52;
+      sim.force('x', d3.forceX(d => (d.cx ? sx(d.cx) : xConf)).strength(.55)).force('y', d3.forceY(cy - 14).strength(.06)).force('charge', d3.forceManyBody().strength(-5));
       const span = cMax - cMin, st = span <= 10 ? 1 : span <= 25 ? 5 : 10, ticks = [cMin];
       for (let t = Math.ceil((cMin + 1) / st) * st; t < cMax; t += st) ticks.push(t);
       ticks.push(cMax);
-      AX = { sx, y: y1 - 10, ticks: [...new Set(ticks)] };
+      AX = { sx, y: y1 - 10, ticks: [...new Set(ticks)], conf: hasConf ? xConf : null };
     } else {
       const key = S.mode, dictK = key === 'industry' ? IND : FN;
       const keys = Object.keys(dictK).filter(k => people.some(p => p[key] === k)), C = {};
@@ -167,9 +175,9 @@ export function mountNetwork(root, opts) {
     if (!p) return;
     STAR = p.helpers.slice(0, 6).map(o => ({ a: o, b: p })).concat(p.helps.slice(0, 6).map(o => ({ a: p, b: o })));
     PEERS = {
-      fn: people.filter(o => o !== p && o.fn === p.fn && p.fn !== 'etc'),
+      fn: people.filter(o => o !== p && inter(o.fnT, p.fnT).some(k => k !== 'etc')),
       industry: people.filter(o => o !== p && o.industry === p.industry && p.industry !== 'etc'),
-      cohort: people.filter(o => o !== p && o.cohort === p.cohort)
+      cohort: people.filter(o => o !== p && (p.type === CONF ? o.type === CONF : (p.cx && o.cx === p.cx)))
     };
     if (S.show.m) STAR.forEach(s => { SELSET.add(s.a); SELSET.add(s.b); });
     ['fn', 'industry', 'cohort'].forEach(t => { if (S.show[t]) PEERS[t].forEach(o => SELSET.add(o)); });
@@ -239,7 +247,8 @@ export function mountNetwork(root, opts) {
       ctx.beginPath(); ctx.moveTo(AX.sx(cMin), AX.y); ctx.lineTo(AX.sx(cMax), AX.y); ctx.stroke();
       ctx.fillStyle = ST.muted; ctx.font = `500 ${11 / k}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       AX.ticks.forEach(c => { const x = AX.sx(c); ctx.beginPath(); ctx.moveTo(x, AX.y); ctx.lineTo(x, AX.y - 5 / k); ctx.stroke(); ctx.fillText(c + '기', x, AX.y + 5 / k); });
-      ctx.textAlign = 'left'; ctx.fillText('입학 기수 · 1기는 1998년', AX.sx(cMin), AX.y - 20 / k);
+      if (AX.conf) { ctx.fillText('학술회', AX.conf, AX.y + 5 / k); }
+      ctx.textAlign = 'left'; ctx.fillText('입학 기수 · 1기는 1998년 · 기수를 모르면 입학 연도로 배치', AX.sx(cMin), AX.y - 20 / k);
     }
     ctx.globalAlpha = 1;
 
@@ -306,7 +315,7 @@ export function mountNetwork(root, opts) {
     return best;
   }
   function showTip(p) {
-    tip.innerHTML = `<b>${esc(p.name)}</b> <span>${p.cohort}기${p.type === 'student' ? ' 재학' : ''} · ${esc(IND[p.industry] || '')}</span><br>${esc(p.org)} <span>${esc(p.title)}</span>`;
+    tip.innerHTML = `<b>${esc(p.name)}</b> <span>${esc(p.lab)} · ${esc(IND[p.industry] || '')}</span><br>${esc(p.org)} <span>${esc(p.title)}</span>`;
     tip.hidden = false;
     const sx = T.applyX(p.dx), sy = T.applyY(p.dy), vw = viz.clientWidth;
     let x = sx + 16; const y = sy - 12;
@@ -328,7 +337,7 @@ export function mountNetwork(root, opts) {
     return `<svg class="nv-sw" width="22" height="8" viewBox="0 0 22 8" aria-hidden="true"><line x1="2" y1="4" x2="20" y2="4" style="${st};stroke-linecap:round"/>${t === 'm' ? `<circle cx="13" cy="4" r="2.2" style="fill:${ST.spark}"/>` : ''}</svg>`;
   };
   const chips = (arr, c) => `<div class="nv-chips">${H_(arr).map(x => `<span class="nv-chip ${c}">${esc(x)}</span>`).join('')}</div>`;
-  const row = (o, why) => `<button class="nv-row" data-nact="sel" data-uid="${o.uid}"><span class="nv-pn">${esc(o.name)}${o.me ? ' (나)' : ''}<i>${o.cohort}기 · ${esc(o.org)}</i></span><span class="nv-pw">${esc(why)}</span></button>`;
+  const row = (o, why) => `<button class="nv-row" data-nact="sel" data-uid="${o.uid}"><span class="nv-pn">${esc(o.name)}${o.me ? ' (나)' : ''}<i>${esc(o.lab)} · ${esc(o.org)}</i></span><span class="nv-pw">${esc(why)}</span></button>`;
   const nameBtns = (list, max) => list.slice(0, max).map(o => `<button class="nv-nm" data-nact="sel" data-uid="${o.uid}">${esc(o.name)}</button>`).join('') + (list.length > max ? `<span class="nv-more">외 ${list.length - max}명</span>` : '');
   function renderPanel() {
     const p = S.sel, me = byUid.get(meUid);
@@ -336,28 +345,28 @@ export function mountNetwork(root, opts) {
       const nc = {}; people.forEach(o => o.need.forEach(h => { nc[h] = (nc[h] || 0) + 1; }));
       const top = Object.entries(nc).sort((a, b) => b[1] - a[1]).slice(0, 4), mx = top.length ? top[0][1] : 1;
       panel.innerHTML = `<p class="nv-k">ALUMNI NETWORK</p>
-        <h2>동문 ${people.length}명,<br>추천 매칭 ${REC.length}쌍</h2>
-        <p class="nv-d">점을 누르면 그 동문을 중심으로 보여줍니다. 넓게 보려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.</p>
-        ${me ? `<section class="nv-sec"><h3>나를 도울 수 있는 동문<b>${me.helpers.length}명</b></h3>
-          ${me.helpers.slice(0, 3).map(o => row(o, H_(inter(o.offer, me.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다. 동문이 늘거나 ‘필요한 것’을 바꾸면 생깁니다.</span>'}
+        <h2>${people.length}명,<br>추천 매칭 ${REC.length}쌍</h2>
+        <p class="nv-d">점을 누르면 그 사람을 중심으로 보여줍니다. 넓게 보려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.</p>
+        ${me ? `<section class="nv-sec"><h3>나를 도울 수 있는 사람<b>${me.helpers.length}명</b></h3>
+          ${me.helpers.slice(0, 3).map(o => row(o, H_(inter(o.offer, me.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다. 사람이 늘거나 ‘필요한 것’을 바꾸면 생깁니다.</span>'}
           <div class="nv-actions"><button class="nv-btn" data-nact="center-me">나를 중심으로 보기</button><a class="nv-btn" href="#/match">시너지 추천 보기</a></div></section>` : ''}
-        ${top.length ? `<section class="nv-sec"><h3>동문들이 가장 많이 찾는 도움</h3>${top.map(([h, c]) => `<div class="nv-bar"><span>${esc(HELP[h] || h)}</span><span class="nv-tr"><i style="--w:${(c / mx * 100).toFixed(1)}%"></i></span><b>${c}명</b></div>`).join('')}</section>` : ''}
+        ${top.length ? `<section class="nv-sec"><h3>가장 많이 찾는 도움</h3>${top.map(([h, c]) => `<div class="nv-bar"><span>${esc(helpLabel(h))}</span><span class="nv-tr"><i style="--w:${(c / mx * 100).toFixed(1)}%"></i></span><b>${c}명</b></div>`).join('')}</section>` : ''}
         <p class="nv-note"><span class="nv-ring" aria-hidden="true"></span><span>금색 테두리가 나입니다.</span></p>`;
     } else {
       const self = p.uid === meUid;
       panel.innerHTML = `<div class="nv-ptop"><span class="nv-k">${self ? 'MY NETWORK' : 'ALUMNI'}</span><button class="nv-close" data-nact="clear">전체 보기</button></div>
         <h2>${esc(p.name)}${self ? ' <span class="nv-me">나</span>' : ''}</h2>
-        <p class="nv-meta">${p.cohort}기${p.type === 'student' ? ' 재학' : ''} · ${esc(IND[p.industry] || '')} · ${esc(FN[p.fn] || '')}</p>
+        <p class="nv-meta">${esc(p.lab)} · ${esc(IND[p.industry] || '')} · ${esc(fnText(p))}</p>
         <p class="nv-org">${esc(p.org)}<br><span>${esc(p.title)}</span></p>
         ${(p.career || []).length ? `<p class="nv-d">경력 · ${esc(p.career.join(' / '))}</p>` : ''}
         ${p.intro ? `<p class="nv-d">${esc(p.intro)}</p>` : ''}
         <div class="nv-give"><div><h4>줄 수 있는 것</h4>${chips(p.offer, 'give')}</div><div><h4>필요한 것</h4>${chips(p.need, 'need')}</div></div>
         <div class="nv-actions"><button class="nv-btn" data-nact="profile" data-uid="${p.uid}">프로필 보기</button>${self ? '' : `<button class="nv-btn primary" data-nact="intro" data-uid="${p.uid}">소개 요청</button>`}</div>
-        <section class="nv-sec"><h3>${swatch('m')}도움받을 수 있는 동문<b>${p.helpers.length}명</b></h3>${p.helpers.length > 6 ? '<p class="nv-h">지도에는 추천 순서대로 6명까지 선으로 보입니다.</p>' : ''}${p.helpers.slice(0, 5).map(o => row(o, H_(inter(o.offer, p.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다</span>'}</section>
-        <section class="nv-sec"><h3>${swatch('m')}도움 줄 수 있는 동문<b>${p.helps.length}명</b></h3>${p.helps.slice(0, 5).map(o => row(o, H_(inter(p.offer, o.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다</span>'}</section>
-        <section class="nv-sec"><h3>${swatch('fn')}같은 직무 · ${esc(FN[p.fn] || '')}<b>${PEERS.fn.length}명</b></h3><div class="nv-names">${PEERS.fn.length ? nameBtns(PEERS.fn, 12) : '<span class="nv-more">아직 없습니다</span>'}</div></section>
+        <section class="nv-sec"><h3>${swatch('m')}도움받을 수 있는 사람<b>${p.helpers.length}명</b></h3>${p.helpers.length > 6 ? '<p class="nv-h">지도에는 추천 순서대로 6명까지 선으로 보입니다.</p>' : ''}${p.helpers.slice(0, 5).map(o => row(o, H_(inter(o.offer, p.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다</span>'}</section>
+        <section class="nv-sec"><h3>${swatch('m')}도움 줄 수 있는 사람<b>${p.helps.length}명</b></h3>${p.helps.slice(0, 5).map(o => row(o, H_(inter(p.offer, o.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다</span>'}</section>
+        <section class="nv-sec"><h3>${swatch('fn')}같은 직무 · ${esc(fnText(p))}<b>${PEERS.fn.length}명</b></h3><div class="nv-names">${PEERS.fn.length ? nameBtns(PEERS.fn, 12) : '<span class="nv-more">아직 없습니다</span>'}</div></section>
         <section class="nv-sec"><h3>${swatch('industry')}같은 업종 · ${esc(IND[p.industry] || '')}<b>${PEERS.industry.length}명</b></h3><div class="nv-names">${PEERS.industry.length ? nameBtns(PEERS.industry, 12) : '<span class="nv-more">아직 없습니다</span>'}</div></section>
-        <section class="nv-sec"><h3>${swatch('cohort')}같은 기수 · ${p.cohort}기<b>${PEERS.cohort.length}명</b></h3><div class="nv-names">${PEERS.cohort.length ? nameBtns(PEERS.cohort, 12) : '<span class="nv-more">아직 없습니다</span>'}</div></section>`;
+        <section class="nv-sec"><h3>${swatch('cohort')}${p.type === CONF ? '같은 학술회 참가자' : `같은 기수 · ${esc(p.cx ? p.cx + '기' : p.lab)}`}<b>${PEERS.cohort.length}명</b></h3><div class="nv-names">${PEERS.cohort.length ? nameBtns(PEERS.cohort, 12) : '<span class="nv-more">아직 없습니다</span>'}</div></section>`;
     }
     panel.classList.remove('swap'); void panel.offsetWidth; panel.classList.add('swap');
     if (!wide && p) panel.scrollTop = 0;
@@ -401,8 +410,8 @@ export function mountNetwork(root, opts) {
   qi.addEventListener('input', () => {
     const v = qi.value.trim().toLowerCase();
     if (!v) { sugg.hidden = true; results = []; return; }
-    results = people.filter(p => [p.name, p.org, p.title, IND[p.industry], FN[p.fn], p.cohort + '기'].join(' ').toLowerCase().includes(v)).slice(0, 7);
-    sugg.innerHTML = results.length ? results.map(p => `<li><button data-uid="${p.uid}"><b>${esc(p.name)}</b><span>${p.cohort}기 · ${esc(p.org)}</span></button></li>`).join('') : '<li class="nv-none">찾는 동문이 없습니다</li>';
+    results = people.filter(p => [p.name, p.org, p.title, IND[p.industry], fnText(p), p.lab].join(' ').toLowerCase().includes(v)).slice(0, 7);
+    sugg.innerHTML = results.length ? results.map(p => `<li><button data-uid="${p.uid}"><b>${esc(p.name)}</b><span>${esc(p.lab)} · ${esc(p.org)}</span></button></li>`).join('') : '<li class="nv-none">찾는 사람이 없습니다</li>';
     sugg.hidden = false;
   }, on);
   qi.addEventListener('keydown', e => {

@@ -409,4 +409,7 @@ button.pchip:hover{border-color:var(--crimson)}
 .co-row.mine b{color:var(--crimson)}
 .auto{padding:18px;display:grid;gap:8px;margin-bottom:16px;border-left:3px solid var(--ok)}
 
+.why .w-bridge::before{content:"⇄";color:var(--ok)}
+.g-first{gap:8px}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

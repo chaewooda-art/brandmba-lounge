@@ -412,4 +412,26 @@ button.pchip:hover{border-color:var(--crimson)}
 .why .w-bridge::before{content:"⇄";color:var(--ok)}
 .g-first{gap:8px}
 
+/* ---------- 로그인 전 미리 보기 ---------- */
+.to-preview{margin-top:-4px}
+.showcase{border-top:1px solid var(--line);margin-top:36px;padding-block:40px 72px;background:linear-gradient(var(--sunk),var(--paper) 340px)}
+.sc-head{display:grid;gap:10px;margin-bottom:18px}
+.sc-head h2{font-size:clamp(1.35rem,1.05rem + 1.1vw,1.9rem)}
+.sc-head .eyebrow-k{display:flex;align-items:center;gap:8px}
+.sc-pick{display:grid;gap:6px}
+.sc-me{font-size:.9rem;color:var(--muted)}
+.sc-me b{background:var(--crimson);color:var(--crimson-ink);font-size:.72rem;padding:1px 8px;border-radius:999px;margin-right:6px}
+.sc-me small,.sc-rec small{color:var(--muted);font-weight:400;font-family:var(--body);font-size:.78rem;margin-left:4px}
+.sc-net .nv-stage{min-height:0}
+.sc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:16px}
+.sc-h{font-family:var(--display);font-size:1.1rem;font-weight:700}
+.sc-recs{display:grid;gap:12px}
+.sc-rec{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.sc-rec:first-child{border-top:0;padding-top:0}
+.sc-rec .dname{font-size:1.05rem}
+.drow.mine span:first-child{font-weight:600}
+.drow em{font-style:normal;font-size:.7rem;color:var(--crimson);margin-left:4px}
+.sc-cta{margin-top:20px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px}
+.sc-cta p{max-width:52ch}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

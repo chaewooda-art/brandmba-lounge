@@ -33,7 +33,8 @@ export function companies(m) {
   const out = new Map(); // 정리한 이름 → 화면에 보일 이름
   [m.org, ...(m.career || []).map(firstPart)].forEach(raw => {
     const disp = String(raw || '').trim(), n = normCo(disp);
-    if (n.length >= 2 && !GENERIC.some(g => n.includes(g)) && !out.has(n)) out.set(n, disp);
+    // '○○대학교', 'OO회사'처럼 이름을 가린 값도 같은 회사로 보지 않음
+    if (n.length >= 2 && !/[○●◯]|^oo|^xx/.test(n) && !GENERIC.some(g => n.includes(g)) && !out.has(n)) out.set(n, disp);
   });
   return out;
 }
@@ -42,7 +43,7 @@ export function companies(m) {
 const STOP = new Set(['연구', '영향', '관한', '대한', '미치는', '중심', '중심으로', '분석', '효과', '사례', '관계', '매개', '조절',
   '역할', '실증', '기반', '활용', '통한', '따른', '방안', '전략', '요인', '인식', '차이', '비교', '고찰', '탐색', '개발', '적용',
   '검증', '측정', '모형', '모델', '이용', '소비자', '브랜드', '브랜딩', '기업', '국내', '한국', '경우', '위한', '통해', '관점',
-  '효과성', '결정요인', '마케팅', '경영', '중요성', '변화', '현황', '개선',
+  '효과성', '결정요인', '마케팅', '경영', '중요성', '변화', '현황', '개선', '경험', '고객', '의도', '구매', '만족', '신뢰', '애착', '참여', '활동',
   'the', 'of', 'and', 'on', 'for', 'to', 'with', 'in', 'a', 'an', 'study', 'effect', 'effects', 'impact', 'brand', 'brands', 'case', 'analysis']);
 const JOSA = /(으로서|으로써|으로|에서의|에서|에게|에의|과의|와의|이라는|라는|이며|에|의|을|를|이|가|은|는|과|와|로|및|도|적)$/;
 export function thesisWords(m) {

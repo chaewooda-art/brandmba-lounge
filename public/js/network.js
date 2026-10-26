@@ -21,7 +21,7 @@ function sprite(rgb) {
 }
 
 export function mountNetwork(root, opts) {
-  const { members, meUid, dict, onProfile, onIntro, onSelect, initialSel } = opts;
+  const { members, meUid, dict, onProfile, onIntro, onSelect, initialSel, demo } = opts;
   const { IND, FN, HELP } = dict;
   const d3 = window.d3;
   if (!d3) { root.innerHTML = '<p class="hint">지도를 불러오지 못했습니다. 페이지를 새로고침해 주세요.</p>'; return { destroy() {} }; }
@@ -349,9 +349,9 @@ export function mountNetwork(root, opts) {
         <p class="nv-d">점을 누르면 그 사람을 중심으로 보여줍니다. 넓게 보려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.</p>
         ${me ? `<section class="nv-sec"><h3>나를 도울 수 있는 사람<b>${me.helpers.length}명</b></h3>
           ${me.helpers.slice(0, 3).map(o => row(o, H_(inter(o.offer, me.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다. 사람이 늘거나 ‘필요한 것’을 바꾸면 생깁니다.</span>'}
-          <div class="nv-actions"><button class="nv-btn" data-nact="center-me">나를 중심으로 보기</button><a class="nv-btn" href="#/match">시너지 추천 보기</a></div></section>` : ''}
+          <div class="nv-actions"><button class="nv-btn" data-nact="center-me">나를 중심으로 보기</button>${demo ? '' : '<a class="nv-btn" href="#/match">시너지 추천 보기</a>'}</div></section>` : ''}
         ${top.length ? `<section class="nv-sec"><h3>가장 많이 찾는 도움</h3>${top.map(([h, c]) => `<div class="nv-bar"><span>${esc(helpLabel(h))}</span><span class="nv-tr"><i style="--w:${(c / mx * 100).toFixed(1)}%"></i></span><b>${c}명</b></div>`).join('')}</section>` : ''}
-        <p class="nv-note"><span class="nv-ring" aria-hidden="true"></span><span>금색 테두리가 나입니다.</span></p>`;
+        <p class="nv-note"><span class="nv-ring" aria-hidden="true"></span><span>${demo ? '금색 테두리가 고른 예시 인물(나)입니다.' : '금색 테두리가 나입니다.'}</span></p>`;
     } else {
       const self = p.uid === meUid;
       panel.innerHTML = `<div class="nv-ptop"><span class="nv-k">${self ? 'MY NETWORK' : 'ALUMNI'}</span><button class="nv-close" data-nact="clear">전체 보기</button></div>

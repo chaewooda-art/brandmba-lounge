@@ -7,6 +7,7 @@ import { ENABLE_GOOGLE, FORM_URL } from './config.js';
 import { mountNetwork } from './network.js';
 import { recommend, synergy, companyGroups } from './synergy.js';
 import { helps, helpLabel, fnsOf, fnTokens, fnText, offerLabels, needLabels, etcList, cohortLabel, orderKey, inter } from './model.js';
+import { DEMO_MEMBERS, DEMO_PERSONAS } from './demo.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -29,7 +30,8 @@ const S = {
   all: [], allContacts: {}, withdrawn: new Set(), imp: null, adminQ: '',
   view: 'boot', loginTab: 'login', form: null,
   filter: { q: '', ind: 'all', type: 'all', helpMe: false }, netSel: null,
-  unsubMember: null, net: null, withdrawing: false, lastStatus: undefined
+  unsubMember: null, net: null, withdrawing: false, lastStatus: undefined,
+  demoMe: DEMO_PERSONAS[0].uid
 };
 
 /* ---------- 공통 조각 ---------- */
@@ -117,6 +119,7 @@ V.login = () => {
       <li><b>라운지 이용</b><span>지도, 시너지 추천, 명부</span></li>
     </ol>
     ${FORM_URL ? `<p class="hint">아직 신청서를 내지 않으셨나요? ${formLink('linkish')}</p>` : ''}
+    <button class="linklike to-preview" type="button" data-act="to-preview">라운지 미리 보기 ↓</button>
   </section>
   <section class="login-box card" aria-label="로그인">
     ${ENABLE_GOOGLE ? `<div class="stack g-first">
@@ -144,8 +147,73 @@ V.login = () => {
     </form>`}
     <p class="mini"><a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></p>
   </section>
-</div>`;
+</div>
+<section class="showcase" id="preview" aria-labelledby="pv"><div class="wrap wide" id="showcase">${showcaseHTML()}</div></section>`;
 };
+
+/* ---------- 로그인 전 미리 보기 (가상 인물) ---------- */
+const demoMe = () => DEMO_MEMBERS.find(u => u.uid === S.demoMe) || DEMO_MEMBERS[0];
+function showcaseHTML() {
+  const me = demoMe(), recs = recommend(me, DEMO_MEMBERS, 3);
+  const cnt = Object.keys(IND).map(k => [k, DEMO_MEMBERS.filter(u => u.industry === k).length]).filter(c => c[1]);
+  const mx = Math.max(1, ...cnt.map(c => c[1]));
+  const peers = DEMO_MEMBERS.filter(o => o.uid !== me.uid && o.industry === me.industry).sort((a, b) => orderKey(a) - orderKey(b));
+  const groups = companyGroups(DEMO_MEMBERS).slice(0, 4);
+  const who = u => `${esc(u.name)} <small>${esc(cohortLabel(u))} · ${esc(u.org)} ${esc(u.title)}</small>`;
+  const chip = u => `<button class="pchip" data-act="demo-profile" data-id="${u.uid}">${esc(u.name)}<small>${esc(cohortLabel(u))}</small></button>`;
+  return `<header class="sc-head">
+    <p class="eyebrow-k">라운지 미리 보기 <span class="badge">예시</span></p>
+    <h2 id="pv">들어오면 이런 연결이 보여요</h2>
+    <p class="sub">가상의 인물 ${DEMO_MEMBERS.length}명으로 만든 예시입니다. 이름은 가렸고 회사 이름도 지어낸 것이에요. 실제 라운지에서는 명부에 오른 동문과 학술회 참가자끼리만 서로를 봅니다.</p>
+    <div class="sc-pick"><span class="mini">누구의 시점으로 볼까요</span>
+      <div class="filters" role="group" aria-label="예시 인물 고르기">${DEMO_PERSONAS.map(p => `<button class="pick" data-act="demo-me" data-id="${p.uid}" aria-pressed="${p.uid === me.uid}">${esc(p.label)}</button>`).join('')}</div>
+    </div>
+    <p class="sc-me"><b>나</b> ${who(me)} · 필요한 것 ${esc(needLabels(me).join(', '))}</p>
+  </header>
+  <div id="sc-net" class="sc-net"></div>
+  <div class="sc-grid">
+    <section class="card msec-card" aria-labelledby="sc1"><h3 id="sc1" class="sc-h">시너지 추천</h3>
+      <p class="hint">필요한 것과 줄 수 있는 것, 거쳐 온 회사, 업종·직무, 논문 주제를 맞춰 이유와 함께 추천해요.</p>
+      <div class="sc-recs">${recs.map(x => `<article class="sc-rec"><button class="rc-main" data-act="demo-profile" data-id="${x.u.uid}"><span class="dname">${who(x.u)}</span></button>${whyList(x.reasons.slice(0, 3))}</article>`).join('')}</div>
+    </section>
+    <section class="card msec-card" aria-labelledby="sc2"><h3 id="sc2" class="sc-h">동종업계 네트워크</h3>
+      <p class="hint">업종별로 누가 있는지, 내 업종에서 같은 직무인 선후배가 누구인지 보여요.</p>
+      <div class="ind-bars">${cnt.map(([k, c]) => `<div class="drow${k === me.industry ? ' mine' : ''}"><span>${esc(IND[k])}${k === me.industry ? ' <em>내 업종</em>' : ''}</span><span class="dbar"><i style="width:${(c / mx * 100).toFixed(1)}%"></i></span><b>${c}</b></div>`).join('')}</div>
+      <div class="pchips">${peers.slice(0, 10).map(chip).join('')}${peers.length > 10 ? `<span class="muted">외 ${peers.length - 10}명</span>` : ''}</div>
+    </section>
+    <section class="card msec-card" aria-labelledby="sc3"><h3 id="sc3" class="sc-h">같은 회사를 거친 사람</h3>
+      <p class="hint">지금 회사와 주요 경력을 맞춰, 같은 회사를 거친 사람끼리 묶어요.</p>
+      <div class="co-list">${groups.map(g => `<div class="co-row${g.people.some(p => p.uid === me.uid) ? ' mine' : ''}"><b>${esc(g.name)}</b><span class="muted">${g.people.length}명</span><div class="pchips">${g.people.slice(0, 8).map(p => p.uid === me.uid ? '<span class="pchip me">나</span>' : chip(p)).join('')}</div></div>`).join('')}</div>
+    </section>
+  </div>
+  <div class="sc-cta"><p>내 정보로 이런 연결을 받아 보려면 신청서를 내 주세요. 운영진이 확인하면 바로 들어올 수 있어요.</p>${formLink('btn btn-primary')}</div>`;
+}
+function mountShowcase() {
+  destroyNet();
+  const root = document.getElementById('sc-net'); if (!root) return;
+  S.net = mountNetwork(root, {
+    members: DEMO_MEMBERS, meUid: S.demoMe, dict: { IND, FN, HELP }, demo: true,
+    onProfile: openDemoProfile, onIntro: () => toast('예시 화면입니다. 라운지에 들어오면 소개 요청을 보낼 수 있어요.'), onSelect: () => {}
+  });
+}
+function openDemoProfile(id) {
+  const u = DEMO_MEMBERS.find(x => x.uid === id); if (!u) return;
+  const me = demoMe(), self = u.uid === me.uid, syn = self ? null : synergy(me, u);
+  openModal(`<div class="pm-head">
+    <p class="dtop"><span>${esc(IND[u.industry] || '')} · ${esc(fnText(u))}</span><span class="coh">${esc(cohortLabel(u))}</span></p>
+    <h2>${esc(u.name)}${self ? '<span class="me-tag">나</span>' : ''} <span class="badge">예시 인물</span></h2>
+    <p class="drole">${esc(u.org)} · ${esc(u.title)}${yearsLabel(u) ? ` · ${esc(yearsLabel(u))}` : ''}</p>
+  </div>
+  ${u.intro ? `<p class="intro">${esc(u.intro)}</p>` : ''}
+  <dl class="kv">
+    <dt>주요 경력</dt><dd>${careerHTML(u)}</dd>
+    ${u.thesis ? `<dt>학위논문</dt><dd>${esc(u.thesis)}</dd>` : ''}
+    <dt>줄 수 있는 것</dt><dd>${tags(offerLabels(u))}</dd><dt>필요한 것</dt><dd>${tags(needLabels(u))}</dd>
+  </dl>
+  ${self ? '' : `<div class="rel"><p class="rel-h">‘나’와의 시너지</p>${syn.reasons.length ? whyList(syn.reasons) : '<p>겹치는 점이 아직 없어요.</p>'}</div>`}
+  <p class="hint">가상의 인물입니다. 실제 라운지에서는 이메일을 확인하고 소개 요청을 보낼 수 있어요.</p>
+  <div class="row-btns">${formLink('btn btn-primary')}<button class="btn btn-ghost" data-act="close">닫기</button></div>`);
+}
 
 V.verify = () => `<div class="wrap narrow"><section class="card pend" aria-labelledby="vt">
   <p class="eyebrow-k">처음 로그인 · 이메일 인증</p>
@@ -748,6 +816,7 @@ async function show(v) {
   if (v === 'intros') fillContacts($('#app'));
   if (v === 'me') fillMyContact();
   if (v === 'admin') renderAdminList();
+  if (v === 'login') mountShowcase();
   if (v === 'net') {
     S.net = mountNetwork($('#net-root'), {
       members: S.members, meUid: S.mid, dict: { IND, FN, HELP }, initialSel: S.netSel,
@@ -907,7 +976,21 @@ document.addEventListener('click', async e => {
   const a = b.dataset.act, id = b.dataset.id;
   try {
     switch (a) {
-      case 'tab': S.loginTab = b.dataset.tab; show('login'); break;
+      case 'tab': {
+        S.loginTab = b.dataset.tab;
+        const box = document.querySelector('.login-box');
+        if (box) { const tmp = document.createElement('div'); tmp.innerHTML = V.login(); box.replaceWith(tmp.querySelector('.login-box')); }
+        else show('login');
+        break;
+      }
+      case 'to-preview': { const el = document.getElementById('preview'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); break; }
+      case 'demo-me': {
+        S.demoMe = b.dataset.id;
+        const box = document.getElementById('showcase');
+        if (box) { box.innerHTML = showcaseHTML(); mountShowcase(); }
+        break;
+      }
+      case 'demo-profile': openDemoProfile(id); break;
       case 'forgot': {
         const em = ($('#li-email') || {}).value || '';
         if (!em.trim()) { $('#li-err').textContent = '비밀번호를 재설정할 이메일을 먼저 적어 주세요.'; $('#li-email').focus(); break; }

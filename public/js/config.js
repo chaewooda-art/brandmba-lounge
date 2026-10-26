@@ -14,7 +14,7 @@ export const firebaseConfig = {
 };
 
 // 2) 동문 신청서(구글 폼) 주소. 비워 두면 링크 버튼이 숨겨집니다.
-export const FORM_URL = "https://forms.gle/pYpPTa2irXytkSvD7";
+export const FORM_URL = "https://forms.gle/xm9XNZ8mWSZ4Tb8W7";
 
 // 3) Google 로그인 버튼. Firebase 콘솔 > Authentication > 로그인 방법에서
 //    Google 을 켠 뒤 true 로 바꿉니다.

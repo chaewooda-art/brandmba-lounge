@@ -26,7 +26,7 @@ Firebase 무료 플랜(Authentication, Firestore, Hosting)과 구글 폼으로 �
 - **학위논문 제목은 받지 않습니다**(신청서·라운지 모두). 기존 신청서에서 지울 때는 `removeThesisQuestion`을 한 번 실행합니다. 예전 기록에 남은 `thesis` 값은 화면에 쓰이지 않고, 본인이 프로필을 저장하거나 자동 연동으로 다시 반영되면 지워집니다.
 
 ### 간편 신청서 (라운지와 별개)
-- `google-form/simple_form.gs`의 `createSimpleForm`: 구글 로그인 없이 내는 짧은 신청서(이름, 연락처, 이메일, 신분: 재학생/졸업생/신입 희망/학술회 참가, 알게 된 경로, 개인정보 동의)와 응답 시트를 만듭니다. 알게 된 경로에서 '지인 추천'을 고르면 다음 쪽에서 추천해 준 분 이름을 받습니다. 이미 만든 신청서에는 `addReferralQuestion`으로 덧붙입니다. 라운지 자동 연동과는 연결되지 않습니다.
+- `google-form/simple_form.gs`: 구글 로그인 없이 내는 짧은 신청서(라운지 자동 연동과 별개). 기본 정보(이름, 연락처, 이메일, 신분: 재학생/졸업생/입학 희망/학술회 참가자/기타) → 신분별 한 칸(입학 연도·희망 입학 시기·신분 직접 입력) → 받고 싶은 안내(여러 개), 알게 된 경로, 개인정보 동의 → 지인 추천이면 추천해 준 분 이름. 새로 만들기는 `createSimpleForm`, 이미 만든 신청서를 맞추기는 `updateSimpleForm`.
 
 ### 자동 연동 설치 (한 번)
 1. Apps Script 프로젝트 ‘BM 라운지 신청서 연동’에 `google-form/create_form.gs`(Code.gs), `google-form/sync.gs`(sync.gs), `google-form/appsscript.json`(매니페스트)을 넣습니다.

@@ -24,13 +24,14 @@ const SIMPLE_SOURCES = ['학술회 현장', '지인 추천', 'SNS', '학교 홈�
 const SIMPLE_GUIDES = ['입학 설명회·상담', '학술회·특강 소식', '동문 네트워킹 모임', '협업·채용 소식']; // + 기타(직접 입력)
 const SIMPLE_WHEN = ['2027년 상반기', '2027년 하반기', '2028년 이후', '아직 정하지 않았어요'];
 const SIMPLE_PRIV = '수집 항목: 이름, 연락처, 이메일, 신분, 희망 입학 시기(입학 희망), 받고 싶은 안내, 알게 된 경로, 추천해 준 분 이름(지인 추천일 때) / 목적: 신청 확인과 안내 연락(행사·입학·소식) / 보관: 수집한 날부터 1년(요청하면 바로 삭제). 동의하지 않을 수 있으며, 이 경우 신청할 수 없습니다. (필수)';
+const SIMPLE_TITLE = '경희대 브랜드 MBA 학술회 참가 신청서';
 const SIMPLE_DESC = '이름, 연락처, 이메일 등 몇 가지만 적어 주세요. 구글 로그인 없이 1분이면 끝나요.\n운영진이 확인하고 안내 연락을 드립니다.';
 // 예전 구조에서 쓰다 뺀 질문·쪽 (updateSimpleForm 이 지움)
 const SIMPLE_OLD_ITEMS = ['입학 연도', '신분(직접 입력)'];
 const SIMPLE_OLD_PAGES = ['동문 정보', '신분 직접 입력'];
 
 function createSimpleForm() {
-  const title = '경희 브랜드MBA 간편 신청서';
+  const title = SIMPLE_TITLE;
   const maxLen = n => FormApp.createTextValidation().requireTextLengthLessThanOrEqualTo(n).setHelpText(n + '자 이내로 적어 주세요.').build();
 
   const form = FormApp.create(title);
@@ -74,6 +75,15 @@ function createSimpleForm() {
 }
 
 // 이미 만든 간편 신청서를 위 구조로 맞춥니다. 이미 받은 응답은 그대로 남습니다. 여러 번 실행해도 됩니다.
+// 이미 만든 신청서의 제목(응답자에게 보이는 제목)과 응답 시트 이름을 SIMPLE_TITLE 로 바꿉니다.
+function renameSimpleForm() {
+  const form = FormApp.openById(SIMPLE_FORM_ID);
+  form.setTitle(SIMPLE_TITLE);
+  let sheet = '';
+  try { const ss = SpreadsheetApp.openById(form.getDestinationId()); ss.rename(SIMPLE_TITLE + ' (응답)'); sheet = ss.getName(); } catch (e) { sheet = '응답 시트 이름은 그대로(' + e + ')'; }
+  Logger.log('신청서 제목: ' + form.getTitle() + ' · 응답 시트: ' + sheet);
+}
+
 function updateSimpleForm() {
   const form = FormApp.openById(SIMPLE_FORM_ID);
   const other = simpleStructure_(form);

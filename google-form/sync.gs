@@ -125,6 +125,8 @@ function syncRow_(cell) {
   if (!isNew && ex.code !== 200) throw new Error('라운지 확인 실패(' + ex.code + ')');
   const fields = toFields_(Object.assign({}, x.profile, { status: isNew ? 'approved' : ((ex.json.fields.status || {}).stringValue || 'approved') }));
   if (!isNew && ex.json.fields.createdAt) fields.createdAt = ex.json.fields.createdAt;
+  // 신청서에는 학위논문 질문이 없음: 라운지에서 적은 논문 제목은 그대로 둠
+  if (!isNew && x.profile.type === 'grad' && !x.profile.thesis && ex.json.fields.thesis) fields.thesis = ex.json.fields.thesis;
   const now = [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }];
   if (isNew || !ex.json.fields.createdAt) now.push({ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' });
   const writes = [

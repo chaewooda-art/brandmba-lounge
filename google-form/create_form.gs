@@ -1,5 +1,5 @@
 /**
- * BM 라운지 신청서(구글 폼) 자동 생성 · 2판
+ * BM 라운지 신청서(구글 폼) 자동 생성 · 3판
  *
  * 사용법
  * 1) 운영진 Gmail로 https://script.google.com 에서 프로젝트를 열고 이 코드를 붙여넣은 뒤 저장
@@ -11,15 +11,18 @@
  *
  * 신청서 구조 (3판)
  *  1쪽  구분(졸업생/재학생/학술회 참가자), 이름
- *       졸업생 → 학위논문 → 동문 정보 / 재학생 → 동문 정보 / 학술회 참가자 → 학술회 참가자 정보
- *  2쪽  학위논문 제목 (졸업생만, 선택)
- *  3쪽  입학 연도(필수), 기수(선택) (졸업생·재학생) → 5쪽으로
- *  4쪽  현재 신분, 입학 관심, 입학 안내 받기(선택) (학술회 참가자만)
- *  5쪽  지금 하는 일과 경력
- *  6쪽  라운지에서 주고받을 것
- *  7쪽  연락처와 동의
+ *       졸업생·재학생 → 동문 정보 / 학술회 참가자 → 학술회 참가자 정보
+ *  2쪽  입학 연도(필수), 기수(선택) (졸업생·재학생) → 4쪽으로
+ *  3쪽  현재 신분, 입학 관심, 입학 안내 받기(선택) (학술회 참가자만)
+ *  4쪽  지금 하는 일과 경력
+ *  5쪽  라운지에서 주고받을 것
+ *  6쪽  연락처와 동의
  *
- * 이미 만든 2판 신청서에 4쪽을 덧붙이려면 addConfQuestions 를 실행합니다(응답은 그대로).
+ * 학위논문 제목은 신청서에서 받지 않습니다. 원하는 졸업생은 라운지 '프로필 고치기'에서 적을 수 있어요.
+ *
+ * 이미 만든 2판 신청서 고치기(응답은 그대로)
+ *  - addConfQuestions     학술회 참가자 정보 쪽 덧붙이기
+ *  - removeThesisQuestion 학위논문 질문과 '졸업생 정보' 쪽 지우기
  *
  * 구글 계정 로그인이 있어야 신청할 수 있고, 로그인한 계정 이메일이 응답 시트의 '이메일 주소' 열에
  * 자동으로 남습니다. 이 이메일이 라운지 로그인 이메일입니다.
@@ -59,7 +62,7 @@ const T = {
   org: '예: CJ제일제당, 개인 스튜디오, ○○대학교 · 학생이면 학교·학과',
   title: '예: 브랜드전략팀 팀장 · 학생이면 전공·학년',
   industry: '학생이면 관심 있는 업종을 골라 주세요.',
-  map: '이름, 구분, 입학 연도·기수, 현재 신분·입학 관심(학술회 참가자), 회사·소속, 직무·직책, 업종, 직무 분야, 경력, 학위논문 제목, 주고받을 것, 한 줄 소개, 구글 계정 이메일을 라운지에 등록된 이용자(동문·학술회 참가자)에게 보여주는 데 동의합니다. 휴대폰 번호와 입학 안내 받기 여부는 공개되지 않습니다. (필수)',
+  map: '이름, 구분, 입학 연도·기수, 현재 신분·입학 관심(학술회 참가자), 회사·소속, 직무·직책, 업종, 직무 분야, 경력, 학위논문 제목(라운지에서 적은 경우), 주고받을 것, 한 줄 소개, 구글 계정 이메일을 라운지에 등록된 이용자(동문·학술회 참가자)에게 보여주는 데 동의합니다. 휴대폰 번호와 입학 안내 받기 여부는 공개되지 않습니다. (필수)',
   priv: '수집 항목: 이 신청서의 모든 응답과 구글 계정 이메일 / 목적: 신청자 확인, 라운지(명부·네트워크 지도·시너지 추천) 제공, 운영진의 라운지 운영·행사 안내 연락, 입학 안내 받기를 고른 분께 입학 설명회·모집 안내 / 보관: 탈퇴할 때까지. ' +
     '라운지는 Google(Firebase, 구글 폼·시트)을 이용하며 일부 정보는 해외 서버에서 처리될 수 있습니다. ' +
     '자세한 내용: ' + LOUNGE_URL + '/privacy.html (필수)'
@@ -92,13 +95,7 @@ function createLoungeForm() {
   const typeItem = form.addMultipleChoiceItem().setTitle('구분').setRequired(true);
   form.addTextItem().setTitle('이름').setRequired(true).setValidation(maxLen(20));
 
-  // 2쪽: 졸업생만
-  const pThesis = form.addPageBreakItem().setTitle('졸업생 정보');
-  form.addTextItem().setTitle('학위논문 제목')
-    .setHelpText('선택 · 논문 주제가 비슷한 동문을 찾아 드려요.')
-    .setValidation(maxLen(100));
-
-  // 3쪽: 졸업생·재학생
+  // 2쪽: 졸업생·재학생
   const pAlumni = form.addPageBreakItem().setTitle('동문 정보');
   form.addTextItem().setTitle('입학 연도').setHelpText('숫자 네 자리로 적어 주세요. 예: 2015').setRequired(true)
     .setValidation(FormApp.createTextValidation().requireNumberBetween(1995, 2030).setHelpText('1995부터 2030 사이 연도로 적어 주세요.').build());
@@ -106,11 +103,11 @@ function createLoungeForm() {
     .setHelpText('선택 · 숫자만. 기억나지 않으면 비워 두세요. 운영진이 입학 연도로 확인해요.')
     .setValidation(FormApp.createTextValidation().requireNumberBetween(1, 80).setHelpText('1부터 80 사이 숫자로 적어 주세요.').build());
 
-  // 4쪽: 학술회 참가자만
+  // 3쪽: 학술회 참가자만
   const pConf = form.addPageBreakItem().setTitle(T.confPage).setHelpText(T.confHelp);
   confItems_(form);
 
-  // 5쪽: 모두
+  // 4쪽: 모두
   const pWork = form.addPageBreakItem().setTitle('지금 하는 일과 경력')
     .setHelpText('같은 업종·같은 회사를 거친 사람과 이어 드리는 데 씁니다.');
   form.addTextItem().setTitle('회사·소속').setHelpText(T.org).setRequired(true).setValidation(maxLen(40));
@@ -122,14 +119,14 @@ function createLoungeForm() {
     .setHelpText('선택 · 한 줄에 하나씩, 최대 3줄. ‘회사 · 직무 · 기간’ 순서로 적으면 같은 회사를 거친 사람을 찾아 드려요.\n예)\nCJ제일제당 · 브랜드매니저 · 2015–2020\n○○에이전시 · AE · 2011–2015')
     .setValidation(FormApp.createParagraphTextValidation().requireTextLengthLessThanOrEqualTo(200).setHelpText('200자 이내로 적어 주세요.').build());
 
-  // 6쪽: 모두
+  // 5쪽: 모두
   form.addPageBreakItem().setTitle('라운지에서 주고받을 것')
     .setHelpText('두 질문은 같은 목록이에요. 내가 필요한 것을 다른 사람이 줄 수 있으면 라운지가 서로를 추천해 드려요.');
   form.addCheckboxItem().setTitle('내가 줄 수 있는 것').setHelpText(HELP_HELP).setChoiceValues(HELPS).showOtherOption(true).setRequired(true).setValidation(atMost3());
   form.addCheckboxItem().setTitle('내가 필요한 것').setHelpText(HELP_HELP).setChoiceValues(HELPS).showOtherOption(true).setRequired(true).setValidation(atMost3());
   form.addTextItem().setTitle('한 줄 소개').setHelpText('선택 · 라운지 이용자에게 보일 한 문장').setValidation(maxLen(60));
 
-  // 7쪽: 모두
+  // 6쪽: 모두
   form.addPageBreakItem().setTitle('연락처와 동의');
   form.addTextItem().setTitle('휴대폰')
     .setHelpText('운영진만 봅니다. 라운지 이용자에게는 공개되지 않아요. 예: 010-1234-5678')
@@ -138,13 +135,13 @@ function createLoungeForm() {
   form.addCheckboxItem().setTitle('공개 동의').setHelpText(T.map).setChoiceValues([AGREE]).setRequired(true);
   form.addCheckboxItem().setTitle('개인정보 수집·이용 동의').setHelpText(T.priv).setChoiceValues([AGREE]).setRequired(true);
 
-  // 구분에 따라 다음 쪽: 졸업생 → 학위논문, 재학생 → 동문 정보, 학술회 참가자 → 학술회 참가자 정보
+  // 구분에 따라 다음 쪽: 졸업생·재학생 → 동문 정보, 학술회 참가자 → 학술회 참가자 정보
   typeItem.setChoices([
-    typeItem.createChoice(TYPES[0], pThesis),
+    typeItem.createChoice(TYPES[0], pAlumni),
     typeItem.createChoice(TYPES[1], pAlumni),
     typeItem.createChoice(TYPES[2], pConf)
   ]);
-  // 동문 정보(3쪽)를 마치면 학술회 참가자 정보(4쪽)를 건너뛰고 지금 하는 일(5쪽)로
+  // 동문 정보(2쪽)를 마치면 학술회 참가자 정보(3쪽)를 건너뛰고 지금 하는 일(4쪽)로
   pConf.setGoToPage(pWork);
 
   if (typeof form.setPublished === 'function') form.setPublished(true);
@@ -267,7 +264,7 @@ function addConfQuestions() {
   const find = (title, type) => items().filter(i => i.getTitle() === title && (!type || i.getType() === type))[0];
   const PB = FormApp.ItemType.PAGE_BREAK;
   const pThesis = find('졸업생 정보', PB), pAlumni = find('동문 정보', PB), pWork = find('지금 하는 일과 경력', PB);
-  if (!pThesis || !pAlumni || !pWork) throw new Error('2판 신청서의 쪽(졸업생 정보, 동문 정보, 지금 하는 일과 경력)을 찾지 못했습니다.');
+  if (!pAlumni || !pWork) throw new Error('신청서의 쪽(동문 정보, 지금 하는 일과 경력)을 찾지 못했습니다.');
 
   // 1) 학술회 참가자 정보 쪽: '지금 하는 일과 경력' 바로 앞에
   let pConf = find(T.confPage, PB);
@@ -285,7 +282,7 @@ function addConfQuestions() {
   // 2) 구분 → 다음 쪽
   const typeItem = find('구분', FormApp.ItemType.MULTIPLE_CHOICE).asMultipleChoiceItem();
   typeItem.setChoices([
-    typeItem.createChoice(TYPES[0], pThesis.asPageBreakItem()),
+    typeItem.createChoice(TYPES[0], (pThesis || pAlumni).asPageBreakItem()),
     typeItem.createChoice(TYPES[1], pAlumni.asPageBreakItem()),
     typeItem.createChoice(TYPES[2], pConf)
   ]);
@@ -300,12 +297,46 @@ function addConfQuestions() {
   find('개인정보 수집·이용 동의').asCheckboxItem().setHelpText(T.priv);
   form.setDescription(T.desc);
 
-  // 4) 확인용 기록
-  const lines = items().map(i => {
+  Logger.log('학술회 참가자 정보 쪽을 반영했습니다. 응답 수: ' + form.getResponses().length + '\n' + formOutline_(form));
+}
+
+// 신청서의 쪽·질문 순서와 구분별 다음 쪽을 글로 (확인용)
+function formOutline_(form) {
+  const PB = FormApp.ItemType.PAGE_BREAK;
+  return form.getItems().map(i => {
     const t = i.getType();
     if (t === PB) { const g = i.asPageBreakItem().getGoToPage(); return '── [' + i.getTitle() + ']' + (g ? ' (앞 쪽을 마치면 → ' + g.getTitle() + ')' : ''); }
     if (t === FormApp.ItemType.MULTIPLE_CHOICE && i.getTitle() === '구분') return '   구분: ' + i.asMultipleChoiceItem().getChoices().map(c => c.getValue() + '→' + (c.getPageNavigationType() === FormApp.PageNavigationType.GO_TO_PAGE ? c.getGotoPage().getTitle() : c.getPageNavigationType())).join(', ');
     return '   ' + i.getTitle();
-  });
-  Logger.log('학술회 참가자 정보 쪽을 반영했습니다. 응답 수: ' + form.getResponses().length + '\n' + lines.join('\n'));
+  }).join('\n');
+}
+
+/* ---------- 학위논문 질문 지우기 ---------- */
+
+// 신청서에서 '학위논문 제목' 질문과 그 질문만 있던 '졸업생 정보' 쪽을 지웁니다. 여러 번 실행해도 됩니다.
+// 졸업생도 재학생처럼 1쪽 → 동문 정보로 갑니다. 이미 받은 응답의 논문 제목은 응답 시트에 그대로 남고,
+// 라운지에 등록된 논문 제목도 지워지지 않습니다(자동 연동은 시트에 논문 제목이 비어 있으면 라운지 값을 그대로 둠).
+function removeThesisQuestion() {
+  const form = FormApp.openById(PropertiesService.getScriptProperties().getProperty('FORM_ID'));
+  const find = (title, type) => form.getItems().filter(i => i.getTitle() === title && (!type || i.getType() === type))[0];
+  const PB = FormApp.ItemType.PAGE_BREAK;
+  const pAlumni = find('동문 정보', PB);
+  if (!pAlumni) throw new Error('‘동문 정보’ 쪽을 찾지 못했습니다.');
+
+  // 1) 구분: 졸업생도 동문 정보로 (쪽을 지우기 전에 먼저 바꿔야 함)
+  const typeItem = find('구분', FormApp.ItemType.MULTIPLE_CHOICE).asMultipleChoiceItem();
+  const next = typeItem.getChoices().map(c => [c.getValue(), c.getPageNavigationType() === FormApp.PageNavigationType.GO_TO_PAGE ? c.getGotoPage() : null]);
+  typeItem.setChoices(next.map(([v, page]) => typeItem.createChoice(v,
+    v === TYPES[0] || !page || page.getTitle() === '졸업생 정보' ? pAlumni.asPageBreakItem() : page)));
+
+  // 2) 질문과 쪽 지우기
+  const q = find('학위논문 제목'), p = find('졸업생 정보', PB);
+  if (q) form.deleteItem(q);
+  if (p) form.deleteItem(p);
+
+  // 3) 공개 동의 문구에서 논문 빼기
+  const map = find('공개 동의');
+  if (map) map.asCheckboxItem().setHelpText(T.map);
+
+  Logger.log((q || p ? '학위논문 질문을 지웠습니다.' : '이미 지워져 있습니다.') + ' 응답 수: ' + form.getResponses().length + '\n' + formOutline_(form));
 }

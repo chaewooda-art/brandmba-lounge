@@ -693,7 +693,12 @@ async function buildImport(text, opts) {
     if (!r.approved) { r.action = 'unapproved'; return; }
     if (S.withdrawn.has(r.mid) && !opts.rejoin) { r.action = 'withdrawn'; return; }
     const ex = existing.get(r.mid);
-    if (ex) { r.existing = { status: ex.status, createdAt: ex.createdAt }; r.action = opts.over ? 'update' : 'exists'; return; }
+    if (ex) {
+      r.existing = { status: ex.status, createdAt: ex.createdAt };
+      // 신청서에는 학위논문 질문이 없음: 라운지에서 적은 논문 제목은 덮어쓰지 않음
+      if (!r.profile.thesis && ex.thesis && r.profile.type === 'grad') r.profile.thesis = ex.thesis;
+      r.action = opts.over ? 'update' : 'exists'; return;
+    }
     r.rejoin = S.withdrawn.has(r.mid);
     r.action = 'create';
   });

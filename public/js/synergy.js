@@ -10,9 +10,11 @@
 //  - 같은 직무 분야(하나라도 겹침)        1점
 //  - 같은 업종·직무의 선배/후배(재학생↔졸업생) 1점 / 0.5점
 //  - 동문 ↔ 학술회 참가자가 같은 업종·직무   0.5점(두 모임을 잇는 연결)
+//    입학 관심자에게 같은 업종·직무 동문은 1점(입학 선배), 동문에게 같은 분야 입학 관심자는 0.5점
+//  - '입학·진학 상담'은 다른 주고받을 것과 같은 방식(줄 수 있음 3점 / 도울 수 있음 2점)
 
 import { INDUSTRIES as IND } from './constants.js';
-import { helps, fnTokens, fnLabel, helpLabel, inter } from './model.js';
+import { helps, fnTokens, fnLabel, helpLabel, inter, isProspect } from './model.js';
 
 const q = arr => arr.map(k => `‘${helpLabel(k)}’`).join(', ');
 
@@ -79,7 +81,11 @@ export function synergy(me, o, cache = new Map()) {
   const near = sameInd || fns.length > 0;
   if (near && me.type === 'student' && o.type === 'grad') { s += 1; R.push({ k: 'senior', t: '같은 분야 선배 동문' }); }
   if (near && me.type === 'grad' && o.type === 'student') { s += .5; R.push({ k: 'junior', t: '같은 분야 후배 동문' }); }
-  if (near && (me.type === 'conf') !== (o.type === 'conf')) { s += .5; R.push({ k: 'bridge', t: o.type === 'conf' ? '같은 분야 학술회 참가자' : '같은 분야 동문' }); }
+  if (near && (me.type === 'conf') !== (o.type === 'conf')) {
+    if (isProspect(me)) { s += 1; R.push({ k: 'senior', t: '같은 분야 동문 · 입학 선배가 될 분' }); }
+    else if (isProspect(o)) { s += .5; R.push({ k: 'junior', t: '같은 분야 입학 관심자' }); }
+    else { s += .5; R.push({ k: 'bridge', t: o.type === 'conf' ? '같은 분야 학술회 참가자' : '같은 분야 동문' }); }
+  }
   return { score: s, reasons: R };
 }
 

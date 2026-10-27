@@ -79,19 +79,25 @@ export function watchMember(mid, cb, onError) {
   }, onError);
 }
 
-export const PROFILE_KEYS = ['name', 'type', 'year', 'cohort', 'thesis', 'org', 'title', 'industry', 'fn', 'fnEtc', 'years', 'career', 'offer', 'offerEtc', 'need', 'needEtc', 'intro'];
-const pickProfile = p => Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k]]));
+export const PROFILE_KEYS = ['name', 'type', 'stage', 'admit', 'year', 'cohort', 'thesis', 'org', 'title', 'industry', 'fn', 'fnEtc', 'years', 'career', 'offer', 'offerEtc', 'need', 'needEtc', 'intro'];
+// stage·admit 은 학술회 참가자만. 예전 기록에는 없을 수 있어 null 로 채웁니다.
+const pickProfile = p => Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k] === undefined ? null : p[k]]));
 
-// 프로필과 휴대폰(운영진만 보는 곳)을 함께 저장
-export async function saveProfile(mid, profile, phone) {
+// 프로필과 운영진만 보는 정보(휴대폰, 입학 안내 동의)를 함께 저장
+export async function saveProfile(mid, profile, phone, admitInfo) {
   const b = writeBatch(db);
   b.update(doc(db, 'members', mid), { ...pickProfile(profile), updatedAt: serverTimestamp() });
-  b.set(doc(db, 'private', mid), { phone: phone || '' }, { merge: true });
+  b.set(doc(db, 'private', mid), { phone: phone || '', admitInfo: !!admitInfo }, { merge: true });
   await b.commit();
 }
-export async function getPhone(mid) {
-  try { const s = await getDoc(doc(db, 'private', mid)); return s.exists() ? s.data().phone || '' : ''; } catch { return ''; }
+export async function getPrivate(mid) {
+  try {
+    const s = await getDoc(doc(db, 'private', mid));
+    const d = s.exists() ? s.data() : {};
+    return { phone: d.phone || '', admitInfo: d.admitInfo === true };
+  } catch { return { phone: '', admitInfo: false }; }
 }
+export const getPhone = async mid => (await getPrivate(mid)).phone;
 
 /* ---------- 동문 목록·연락처 ---------- */
 const rows = snap => snap.docs.map(d => ({ uid: d.id, ...d.data() }));
@@ -99,6 +105,7 @@ export const listApproved = async () =>
   rows(await getDocs(query(collection(db, 'members'), where('status', '==', 'approved'))));
 
 // 명부에 오른 이용자끼리는 이메일이 보입니다. 읽을 수 없으면 null.
+// 학부생·입학 관심자는 연결 요청이 수락된 상대의 이메일만 읽을 수 있습니다(firestore.rules).
 export async function getContact(mid) {
   try {
     const s = await getDoc(doc(db, 'contacts', mid));
@@ -135,17 +142,17 @@ export async function loadAdminData() {
   const [m, c, p, w] = await Promise.all([
     getDocs(collection(db, 'members')), getDocs(collection(db, 'contacts')), getDocs(collection(db, 'private')), getDocs(collection(db, 'withdrawn'))
   ]);
-  const phones = Object.fromEntries(p.docs.map(d => [d.id, d.data().phone || '']));
+  const priv = Object.fromEntries(p.docs.map(d => [d.id, d.data()]));
   return {
     members: rows(m),
-    contacts: Object.fromEntries(c.docs.map(d => [d.id, { ...d.data(), phone: phones[d.id] || '' }])),
+    contacts: Object.fromEntries(c.docs.map(d => [d.id, { ...d.data(), phone: (priv[d.id] || {}).phone || '', admitInfo: (priv[d.id] || {}).admitInfo === true }])),
     withdrawn: new Set(w.docs.map(d => d.id))
   };
 }
 export const setStatus = (mid, status) =>
   updateDoc(doc(db, 'members', mid), { status, updatedAt: serverTimestamp() });
 
-// 신청서 직접 가져오기. items: [{ mid, profile, contact:{email,phone}, existing, rejoin }]
+// 신청서 직접 가져오기. items: [{ mid, profile, contact:{email,phone,admitInfo}, existing, rejoin }]
 export async function importMembers(items, onProgress) {
   let done = 0;
   for (let i = 0; i < items.length; i += 120) {
@@ -161,7 +168,7 @@ export async function importMembers(items, onProgress) {
         email: normEmail(it.contact.email),
         consent: { map: true, privacy: true, version: POLICY_VERSION, at: serverTimestamp(), via: 'google-form' }
       });
-      b.set(doc(db, 'private', it.mid), { phone: it.contact.phone || '' });
+      b.set(doc(db, 'private', it.mid), { phone: it.contact.phone || '', admitInfo: !!it.contact.admitInfo });
       if (it.rejoin) b.delete(doc(db, 'withdrawn', it.mid));
     });
     await b.commit();

@@ -1,12 +1,12 @@
 // 라운지 화면과 흐름 (신청서 방식 · 2판)
 // 구글 폼 신청(구글 로그인) → 운영진이 시트에서 '승인' 체크(자동 연동) → 신청한 구글 계정으로 로그인 → 지도·추천·명부·소개 요청
 
-import { INDUSTRIES as IND, FUNCTIONS as FN, HELPS as HELP, TYPES, YEARS, MAX_PICK, MAX_CAREER, CAREER_LEN, THESIS_LEN, ETC_LEN, YEAR_MIN, YEAR_MAX, COHORT_MAX, FORM_COLUMNS as COL, AGREE } from './constants.js';
+import { INDUSTRIES as IND, FUNCTIONS as FN, HELPS as HELP, TYPES, STAGES, ADMITS, YEARS, MAX_PICK, MAX_CAREER, CAREER_LEN, THESIS_LEN, ETC_LEN, YEAR_MIN, YEAR_MAX, COHORT_MAX, FORM_COLUMNS as COL, AGREE, ADMIT_INFO_YES } from './constants.js';
 import * as api from './api.js';
 import { ENABLE_GOOGLE, FORM_URL } from './config.js';
 import { mountNetwork } from './network.js';
 import { recommend, synergy, companyGroups } from './synergy.js';
-import { helps, helpLabel, fnsOf, fnTokens, fnText, offerLabels, needLabels, etcList, cohortLabel, orderKey, inter } from './model.js';
+import { helps, helpLabel, fnsOf, fnTokens, fnText, offerLabels, needLabels, etcList, cohortLabel, orderKey, inter, isLimited, isProspect } from './model.js';
 import { DEMO_MEMBERS, DEMO_PERSONAS } from './demo.js';
 
 const $ = s => document.querySelector(s);
@@ -19,7 +19,7 @@ const when = ts => { const d = ts && ts.toDate ? ts.toDate() : null; return d ? 
 const ms = ts => (ts && ts.toMillis ? ts.toMillis() : Date.now());
 const formLink = (cls = 'btn btn-ghost') => FORM_URL ? `<a class="${cls}" href="${esc(FORM_URL)}" target="_blank" rel="noopener">신청서 작성하기</a>` : '';
 const FN_PICK = Object.fromEntries(Object.entries(FN).filter(([k]) => k !== 'etc'));
-const yearsLabel = u => (YEARS[u.years] ? `경력 ${YEARS[u.years]}` : '');
+const yearsLabel = u => (u.years === 'none' ? '경력 없음' : YEARS[u.years] ? `경력 ${YEARS[u.years]}` : '');
 const careerList = u => (u.career || []).filter(Boolean);
 const careerHTML = u => careerList(u).length
   ? `<ul class="career">${careerList(u).map(l => `<li>${esc(l)}</li>`).join('')}</ul>`
@@ -256,6 +256,12 @@ V.form = () => {
     return `<div class="field"><span class="label" id="lb-${k}">${label}${single ? '' : ` <small id="cnt-${k}">${f[k].length}/${max}</small>`}</span><div class="picks" role="group" aria-labelledby="lb-${k}" data-key="${k}" data-group="${k}" data-max="${max}"${single ? ' data-single="1"' : ''} tabindex="-1">${btns}</div><p class="ferr" id="e-${k}"></p></div>`;
   };
   const isConf = f.type === 'conf';
+  // 학부생·입학 관심 표시는 본인이 풀 수 없음(firestore.rules). 운영진이 신청서로 바꿉니다.
+  const locked = isLimited(S.member);
+  const fixed = (label, val) => `<div class="field"><span class="label">${label}</span><p class="static">${esc(val || '—')}</p></div>`;
+  const confFields = !isConf ? '' : locked
+    ? `${fixed('현재 신분', STAGES[f.stage])}${fixed('브랜드매니지먼트전공 입학 관심', ADMITS[f.admit])}<p class="mini">구분·신분·입학 관심은 운영진이 바꿉니다. 입학했거나 바뀐 점이 있으면 신청서에서 ‘응답 수정’을 하거나 운영진에게 알려 주세요.</p>`
+    : `${grp('stage', '현재 신분', STAGES, 1, true)}${grp('admit', '브랜드매니지먼트전공 입학 관심', ADMITS, 1, true)}`;
   return `<div class="wrap narrow">
   <header class="page-head">
     <p class="eyebrow-k">프로필 수정</p>
@@ -264,7 +270,8 @@ V.form = () => {
   </header>
   <form id="pf" novalidate>
     <section class="fs" aria-labelledby="fs1"><h2 id="fs1">기본 정보</h2>
-      ${grp('type', '구분', TYPES, 1, true)}
+      ${locked ? fixed('구분', TYPES[f.type]) : grp('type', '구분', TYPES, 1, true)}
+      ${confFields}
       ${inp('name', '이름', 'text', 'autocomplete="name" maxlength="20"')}
       ${isConf ? '' : `<div class="g2">
         ${inp('year', '입학 연도', 'text', 'inputmode="numeric" maxlength="4" placeholder="예: 2015"')}
@@ -275,8 +282,8 @@ V.form = () => {
     </section>
     <section class="fs" aria-labelledby="fs2"><h2 id="fs2">지금 하는 일과 경력</h2>
       <div class="g2">
-        ${inp('org', '회사·소속', 'text', 'maxlength="40"')}
-        ${inp('title', '직무·직책', 'text', 'maxlength="40"')}
+        ${inp('org', '회사·소속', 'text', 'maxlength="40" placeholder="학생이면 학교·학과"')}
+        ${inp('title', '직무·직책', 'text', 'maxlength="40" placeholder="학생이면 전공·학년"')}
       </div>
       ${grp('industry', '업종', IND, 1, true)}
       ${grp('fn', '직무 분야', FN_PICK, MAX_PICK, false)}
@@ -295,8 +302,9 @@ V.form = () => {
       ${inp('needEtc', '필요한 것 · 기타 <small>쉼표로 여러 개</small>', 'text', `maxlength="${ETC_LEN}"`)}
       ${inp('intro', '한 줄 소개 <small>선택 · 최대 60자</small>', 'text', 'maxlength="60" placeholder="라운지 이용자에게 보일 한 문장"')}
     </section>
-    <section class="fs" aria-labelledby="fs4"><h2 id="fs4">휴대폰</h2>
+    <section class="fs" aria-labelledby="fs4"><h2 id="fs4">운영진만 보는 정보</h2>
       ${inp('phone', '휴대폰 <small>운영진만 봅니다</small>', 'tel', 'maxlength="20" autocomplete="tel" placeholder="010-0000-0000"')}
+      ${isConf ? `<label class="check"><input type="checkbox" data-key="admitInfo" ${f.admitInfo ? 'checked' : ''}><span>입학 안내 받기 <small class="muted">선택 · 운영진이 브랜드매니지먼트전공 입학 설명회·모집 안내를 휴대폰·이메일로 보내 드려요</small></span></label>` : ''}
     </section>
     <div class="form-foot">
       <p class="err-sum" id="err-sum" role="alert"></p>
@@ -328,6 +336,7 @@ V.dir = () => {
     <div class="filters" role="group" aria-label="구분으로 거르기">
       <button class="pick" data-act="dtype" data-val="all" aria-pressed="${f.type === 'all'}">모든 구분</button>
       ${Object.entries(TYPES).map(([k, v]) => `<button class="pick" data-act="dtype" data-val="${k}" aria-pressed="${f.type === k}">${esc(v)}</button>`).join('')}
+      <button class="pick" data-act="dtype" data-val="prospect" aria-pressed="${f.type === 'prospect'}">입학 관심</button>
     </div>
     <label class="toggle"><input type="checkbox" id="dir-help" ${f.helpMe ? 'checked' : ''}>나에게 도움 줄 수 있는 사람만 보기</label>
   </div>
@@ -353,10 +362,11 @@ function renderDirList() {
   const f = S.filter, q = f.q.trim().toLowerCase();
   const L = S.members.filter(u => {
     if (f.ind !== 'all' && u.industry !== f.ind) return false;
-    if (f.type !== 'all' && (u.type || 'grad') !== f.type) return false;
+    if (f.type === 'prospect') { if (!isProspect(u)) return false; }
+    else if (f.type !== 'all' && (u.type || 'grad') !== f.type) return false;
     if (f.helpMe && (u.uid === S.mid || !helps(u, S.member).length)) return false;
     if (q) {
-      const hay = [u.name, u.org, u.title, IND[u.industry], fnText(u), cohortLabel(u), u.year ? u.year + '' : '', TYPES[u.type], YEARS[u.years], u.thesis, ...careerList(u), u.intro, ...offerLabels(u), ...needLabels(u)].join(' ').toLowerCase();
+      const hay = [u.name, u.org, u.title, IND[u.industry], fnText(u), cohortLabel(u), u.year ? u.year + '' : '', TYPES[u.type], STAGES[u.stage], ADMITS[u.admit] && isProspect(u) ? '입학' : '', YEARS[u.years], u.thesis, ...careerList(u), u.intro, ...offerLabels(u), ...needLabels(u)].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -434,7 +444,7 @@ V.intros = () => {
   </article>`; };
   return `<div class="wrap narrow">
   <header class="page-head"><p class="eyebrow-k">소개 요청</p><h1>동문과 연결되는 곳</h1>
-  <p class="sub">소개 요청은 라운지 안에서 먼저 인사를 건네는 방법이에요. 수락하면 ‘연결됨’으로 표시되고, 이메일로 바로 이야기를 이어 가면 됩니다. 새 요청은 메일로 알려드리지 않으니 가끔 들러 확인해 주세요.</p></header>
+  <p class="sub">소개 요청은 라운지 안에서 먼저 인사를 건네는 방법이에요. 수락하면 ‘연결됨’으로 표시되고, 이메일로 바로 이야기를 이어 가면 됩니다.${isLimited(S.member) ? ' 학부생·입학 관심자는 요청이 수락된 상대의 이메일을 볼 수 있어요.' : ''} 새 요청은 메일로 알려드리지 않으니 가끔 들러 확인해 주세요.</p></header>
   <section class="isec" aria-labelledby="ir"><h2 id="ir">받은 요청 <span class="muted">${R.length}</span></h2>${R.length ? R.map(recv).join('') : '<p class="empty">아직 받은 요청이 없습니다.</p>'}</section>
   <section class="isec" aria-labelledby="is"><h2 id="is">보낸 요청 <span class="muted">${Sn.length}</span></h2>${Sn.length ? Sn.map(sent).join('') : '<p class="empty">지도나 명부에서 동문을 골라 소개 요청을 보내 보세요.</p>'}</section>
 </div>`;
@@ -455,6 +465,7 @@ V.me = () => {
     <section class="card me-body" aria-label="프로필 정보">
       <dl class="kv">
         <dt>구분</dt><dd>${esc(TYPES[u.type] || '')}</dd>
+        ${u.type === 'conf' ? `<dt>현재 신분</dt><dd>${STAGES[u.stage] ? esc(STAGES[u.stage]) : '<span class="muted">비어 있음</span>'}</dd><dt>입학 관심</dt><dd>${ADMITS[u.admit] ? esc(ADMITS[u.admit]) : '<span class="muted">비어 있음</span>'}</dd>` : ''}
         <dt>회사·직책</dt><dd>${esc(u.org)} · ${esc(u.title)}</dd>
         ${u.type === 'conf' ? '' : `<dt>입학</dt><dd>${u.year ? u.year + '년' : '<span class="muted">비어 있음</span>'}${u.cohort ? ` · ${u.cohort}기` : ''}</dd>`}
         <dt>업종</dt><dd>${esc(IND[u.industry] || '')}</dd>
@@ -467,7 +478,9 @@ V.me = () => {
         <dt>한 줄 소개</dt><dd>${u.intro ? esc(u.intro) : '<span class="muted">비어 있음</span>'}</dd>
         <dt>이메일</dt><dd data-mycontact><span class="muted">불러오는 중</span></dd>
         <dt>휴대폰</dt><dd data-myphone><span class="muted">불러오는 중</span></dd>
+        ${u.type === 'conf' ? '<dt>입학 안내</dt><dd data-myadmit><span class="muted">불러오는 중</span></dd>' : ''}
       </dl>
+      ${isLimited(u) ? '<p class="hint">학부생·입학 관심자는 다른 이용자의 이메일을 소개 요청이 수락된 뒤에 볼 수 있어요. 내 이메일은 라운지 이용자에게 보입니다.</p>' : ''}
       <div class="row-btns"><button class="btn btn-ghost" data-act="edit-profile">프로필 고치기</button><button class="btn btn-ghost" data-act="logout">로그아웃</button></div>
     </section>
   </div>
@@ -489,6 +502,8 @@ V.admin = () => {
     <div class="card tile"><span>명부에서 내린 동문</span><b>${Hd.length}<small>명</small></b></div>
     <div class="card tile"><span>탈퇴 기록</span><b>${S.withdrawn.size}<small>건</small></b></div>
   </div>
+
+  ${prospectHTML()}
 
   <section class="card auto" aria-labelledby="aa">
     <h2 id="aa">자동 연동</h2>
@@ -531,6 +546,21 @@ V.admin = () => {
   <p class="hint">운영진 추가와 해제는 Firebase 콘솔의 admins 컬렉션에서 합니다. README.md를 참고하세요.</p>
 </div>`;
 };
+// 입학 관심자(학술회 참가자 중 '관심 있어요'·'이미 지원·합격') 명단. 안내 연락은 '입학 안내 받기'에 동의한 사람에게만.
+const prospects = () => S.all.filter(isProspect).sort((a, b) => (a.admit === b.admit ? 0 : a.admit === 'yes' ? -1 : 1) || a.name.localeCompare(b.name, 'ko'));
+function prospectHTML() {
+  const L = prospects(), ok = L.filter(u => (S.allContacts[u.uid] || {}).admitInfo).length;
+  return `<section class="card prosp" aria-labelledby="ap">
+    <div class="sec-head"><h2 id="ap">입학 관심자</h2><span class="muted">${L.length}명 · 안내 동의 ${ok}명</span>${L.length ? '<button class="btn btn-ghost btn-sm push" data-act="prospect-csv">명단 내려받기</button>' : ''}</div>
+    <p class="hint">학술회 참가자 중 브랜드매니지먼트전공 입학에 관심 있다고 답한 사람입니다. 입학 설명회·모집 안내는 <b>안내 동의</b> 표시가 있는 사람에게만 보내 주세요.</p>
+    ${L.length ? `<div class="arows">${L.map(u => { const c = S.allContacts[u.uid] || {}; return `<div class="arow">
+      <div class="a-who"><b>${esc(u.name)}</b><span>${esc(cohortLabel(u))}</span>${c.admitInfo ? ' <span class="badge ok">안내 동의</span>' : ' <span class="badge">안내 미동의</span>'}${u.status === 'hidden' ? ' <span class="badge warn">내림</span>' : ''}<small>${esc(c.email || '')}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
+      <div class="a-job">${esc(u.org)} · ${esc(u.title)}</div>
+      <div class="a-ind">${esc(IND[u.industry] || '')}</div>
+      <div class="a-date">${esc(ADMITS[u.admit] || '')}</div>
+    </div>`; }).join('')}</div>` : '<p class="empty">아직 입학 관심자가 없습니다.</p>'}
+  </section>`;
+}
 function renderAdminList() {
   const box = $('#adm-list'); if (!box) return;
   const q = S.adminQ.trim().toLowerCase();
@@ -595,6 +625,10 @@ function parseRow(cell) {
     const c = cell('cohort').replace(/기$/, '');
     if (c) { if (/^\d{1,2}$/.test(c) && +c >= 1 && +c <= COHORT_MAX) cohort = +c; else errs.push(`기수 ‘${c}’ 확인 필요`); }
   }
+  // 학술회 참가자: 현재 신분·입학 관심(3판에 추가된 질문이라 비어 있으면 null), 입학 안내 받기(선택)
+  const stage = type === 'conf' ? keyOf(STAGES, cell('stage')) : null;
+  const admit = type === 'conf' ? keyOf(ADMITS, cell('admit')) : null;
+  const admitInfo = type === 'conf' && cell('admitInfo').includes(ADMIT_INFO_YES);
   const thesis = type === 'grad' ? cell('thesis').slice(0, THESIS_LEN) : '';
   const org = cell('org').slice(0, 40), title = cell('title').slice(0, 40);
   if (!org) errs.push('회사·소속 없음');
@@ -623,9 +657,9 @@ function parseRow(cell) {
   if (/^1\d{8,9}$/.test(phone)) phone = '0' + phone; // 시트가 앞자리 0을 지운 경우
   return {
     errs, email, name, type, year, cohort,
-    profile: { name, type, year, cohort, thesis, org, title, industry, fn: fn.keys, fnEtc: fn.etc, years, career,
+    profile: { name, type, stage, admit, year, cohort, thesis, org, title, industry, fn: fn.keys, fnEtc: fn.etc, years, career,
       offer: offer.keys, offerEtc: offer.etc, need: need.keys, needEtc: need.etc, intro },
-    contact: { email, phone }
+    contact: { email, phone, admitInfo }
   };
 }
 
@@ -726,6 +760,10 @@ function profileHTML(u) {
   <div class="row-btns"><a class="btn btn-ghost" href="#/net" data-act="map-of" data-id="${u.uid}">지도에서 보기</a>${introCTA(u)}</div>`;
 }
 // 라운지 이용자끼리는 이메일만 보입니다(휴대폰은 운영진만).
+// 학부생·입학 관심자는 소개 요청이 수락된 상대의 이메일만 봅니다.
+const linkedWith = id => { const { s, r } = introWith(id); return !!((s && s.status === 'accepted') || (r && r.status === 'accepted')); };
+const emailLocked = id => id !== S.mid && isLimited(S.member) && !linkedWith(id);
+const LOCKED_EMAIL = '<span class="mini">이메일</span><span class="muted">소개 요청이 수락되면 이메일이 보여요.</span>';
 function contactHTML(c) {
   if (!c || !c.email) return '<span class="mini">이메일</span><span class="muted">불러오지 못했습니다</span>';
   return `<span class="mini">이메일</span><code>${esc(c.email)}</code><button class="btn btn-ghost btn-sm" data-act="copy" data-text="${esc(c.email)}">이메일 복사</button>`;
@@ -733,6 +771,7 @@ function contactHTML(c) {
 async function fillContacts(scope) {
   const boxes = [...scope.querySelectorAll('[data-contact]')];
   await Promise.all(boxes.map(async b => {
+    if (emailLocked(b.dataset.contact)) { b.innerHTML = LOCKED_EMAIL; return; }
     const c = await api.getContact(b.dataset.contact);
     if (document.contains(b)) b.innerHTML = contactHTML(c);
   }));
@@ -748,16 +787,18 @@ function openIntro(id) {
   if (!u || id === S.mid) return;
   const me = S.member, h = helps(u, me), g = helps(me, u);
   const R = synergy(me, u).reasons, has = k => R.find(x => x.k === k);
-  const why = h.length ? `${helpLabel(h[0])} 쪽으로 조언을 듣고 싶어서 연락드립니다.`
+  const why = h.includes('admit') || (wantsAdmit && !h.length) ? '브랜드매니지먼트전공 입학을 생각하고 있어 이야기를 듣고 싶어 연락드립니다.'
+    : h.length ? `${helpLabel(h[0])} 쪽으로 조언을 듣고 싶어서 연락드립니다.`
     : g.length ? `${helpLabel(g[0])} 쪽으로 도움을 드릴 수 있을 것 같아 연락드립니다.`
     : has('co') ? `${has('co').t.replace('같은 회사 출신 · ', '')}을(를) 거친 인연이 반가워 연락드립니다.`
     : has('ind') ? `같은 ${IND[u.industry]} 업계에 계셔서 인사드리고 싶어 연락드립니다.`
     : has('thesis') ? '논문 주제가 비슷해서 이야기 나눠 보고 싶어 연락드립니다.'
     : '라운지에서 프로필을 보고 인사드리고 싶어 연락드립니다.';
   const who = me.type === 'conf' ? `${me.org} ${me.name}` : `${cohortLabel(me)} ${me.name}`;
+  const wantsAdmit = isProspect(me) && !isProspect(u) && u.type !== 'conf';
   const msg = `안녕하세요, ${who}입니다. ${why} 편하실 때 짧게 통화나 커피 한잔 가능할까요?`;
   openModal(`<div class="pm-head"><h2>${esc(u.name)} 님에게 소개 요청</h2></div>
-    <p class="hint">상대는 다음에 라운지에 들어올 때 요청을 보게 됩니다. 급하면 프로필에 있는 이메일로 바로 연락해도 됩니다.</p>
+    <p class="hint">상대는 다음에 라운지에 들어올 때 요청을 보게 됩니다. ${isLimited(me) ? '상대가 수락하면 서로 이메일이 보여요.' : '급하면 프로필에 있는 이메일로 바로 연락해도 됩니다.'}</p>
     <div class="field"><label for="intro-msg">보낼 메시지 <small>최대 500자</small></label><textarea id="intro-msg" rows="5" maxlength="500">${esc(msg)}</textarea><p class="ferr" id="intro-err" role="alert"></p></div>
     <div class="row-btns"><button class="btn btn-primary" data-act="send-intro" data-id="${id}">요청 보내기</button><button class="btn btn-ghost" data-act="close">취소</button></div>`);
 }
@@ -835,14 +876,17 @@ async function fillMyContact() {
   const c = await api.getContact(S.mid);
   if (!document.contains(box)) return;
   box.innerHTML = c ? `${esc(c.email)} <span class="badge ok">라운지 이용자에게 공개</span>` : '<span class="muted">정보 없음</span>';
-  const pb = document.querySelector('[data-myphone]');
-  if (pb) { const ph = await api.getPhone(S.mid); if (document.contains(pb)) pb.innerHTML = `${ph ? esc(ph) : '<span class="muted">비어 있음</span>'} <span class="badge">운영진만 봄</span>`; }
+  const pb = document.querySelector('[data-myphone]'), ab = document.querySelector('[data-myadmit]');
+  if (!pb && !ab) return;
+  const pv = await api.getPrivate(S.mid);
+  if (pb && document.contains(pb)) pb.innerHTML = `${pv.phone ? esc(pv.phone) : '<span class="muted">비어 있음</span>'} <span class="badge">운영진만 봄</span>`;
+  if (ab && document.contains(ab)) ab.innerHTML = `${pv.admitInfo ? '받음' : '받지 않음'} <span class="badge">운영진만 봄</span>`;
 }
 
 /* ---------- 로그인 상태에 따라 길 안내 ---------- */
-function formFromMember(m, c) {
-  const cr = careerList(m);
-  return { name: m.name, type: m.type || 'grad', year: m.year ? String(m.year) : '', cohort: m.cohort ? String(m.cohort) : '', thesis: m.thesis || '',
+function formFromMember(m, pv = {}) {
+  const cr = careerList(m), c = pv.phone || '';
+  return { name: m.name, type: m.type || 'grad', stage: m.stage || '', admit: m.admit || '', admitInfo: pv.admitInfo === true, year: m.year ? String(m.year) : '', cohort: m.cohort ? String(m.cohort) : '', thesis: m.thesis || '',
     org: m.org, title: m.title, industry: m.industry, fn: fnsOf(m).filter(k => k !== 'etc'), fnEtc: m.fnEtc || '',
     years: m.years || '', career0: cr[0] || '', career1: cr[1] || '', career2: cr[2] || '',
     offer: (m.offer || []).slice(), offerEtc: m.offerEtc || '', need: (m.need || []).slice(), needEtc: m.needEtc || '',
@@ -911,6 +955,8 @@ async function submitProfile() {
   const year = parseInt(yStr, 10), cohort = parseInt(cStr, 10);
   const fnEtc = String(f.fnEtc || '').trim().slice(0, ETC_LEN);
   if (!TYPES[f.type]) E.type = '구분을 골라 주세요.';
+  if (conf && !STAGES[f.stage]) E.stage = '현재 신분을 골라 주세요.';
+  if (conf && !ADMITS[f.admit]) E.admit = '입학 관심을 골라 주세요.';
   if (!f.name.trim()) E.name = '이름을 적어 주세요.';
   if (!conf && !(/^\d{4}$/.test(yStr) && year >= YEAR_MIN && year <= YEAR_MAX)) E.year = `입학 연도를 ${YEAR_MIN}–${YEAR_MAX} 사이 네 자리로 적어 주세요.`;
   if (!conf && cStr && !(/^\d{1,2}$/.test(cStr) && cohort >= 1 && cohort <= COHORT_MAX)) E.cohort = '기수는 숫자로 적거나 비워 두세요.';
@@ -921,7 +967,7 @@ async function submitProfile() {
   else if (f.fn.length + (fnEtc ? 1 : 0) > MAX_PICK) E.fn = `직무 분야는 기타를 합쳐 ${MAX_PICK}개까지입니다.`;
   if (!YEARS[f.years]) E.years = '총 경력 연차를 골라 주세요.';
   if (f.phone.trim() && !/^[0-9+\-\s()]{9,20}$/.test(f.phone.trim())) E.phone = '숫자와 하이픈으로 적어 주세요.';
-  ['type', 'name', 'year', 'cohort', 'org', 'title', 'industry', 'fn', 'years', 'phone'].forEach(k => {
+  ['type', 'stage', 'admit', 'name', 'year', 'cohort', 'org', 'title', 'industry', 'fn', 'years', 'phone'].forEach(k => {
     setErr(k, E[k] || '');
     const t = document.querySelector(`#pf [data-key="${k}"]`); if (t) t.setAttribute('aria-invalid', E[k] ? 'true' : 'false');
   });
@@ -932,7 +978,7 @@ async function submitProfile() {
   const etc = v => etcList(String(v || '')).join(', ').slice(0, ETC_LEN);
   const career = [f.career0, f.career1, f.career2].map(x => String(x || '').trim().slice(0, CAREER_LEN)).filter(Boolean).slice(0, MAX_CAREER);
   const profile = {
-    name: f.name.trim(), type: f.type, year: conf ? null : year, cohort: conf || !cStr ? null : cohort,
+    name: f.name.trim(), type: f.type, stage: conf ? f.stage : null, admit: conf ? f.admit : null, year: conf ? null : year, cohort: conf || !cStr ? null : cohort,
     thesis: f.type === 'grad' ? String(f.thesis || '').trim().slice(0, THESIS_LEN) : '',
     org: f.org.trim(), title: f.title.trim(), industry: f.industry, fn: f.fn.slice(0, MAX_PICK), fnEtc,
     years: f.years, career, offer: f.offer.slice(), offerEtc: etc(f.offerEtc), need: f.need.slice(), needEtc: etc(f.needEtc), intro: f.intro.trim()
@@ -940,7 +986,7 @@ async function submitProfile() {
   const btn = $('#pf-submit');
   busy(btn, true, '저장하는 중…');
   try {
-    await api.saveProfile(S.mid, profile, f.phone.trim());
+    await api.saveProfile(S.mid, profile, f.phone.trim(), conf && f.admitInfo);
     S.form = null;
     Object.assign(S.member, profile);
     const i = S.members.findIndex(x => x.uid === S.mid); if (i >= 0) Object.assign(S.members[i], profile);
@@ -954,12 +1000,25 @@ async function submitProfile() {
 }
 
 /* ---------- 백업 ---------- */
+const csvCell = v => { let s = String(v ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
+function saveCSV(name, head, lines) {
+  const blob = new Blob(['\ufeff' + [head.map(csvCell).join(','), ...lines.map(l => l.map(csvCell).join(','))].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function downloadProspects() {
+  saveCSV('bm-lounge-prospects', ['이름', '현재 신분', '입학 관심', '입학 안내 받기', '회사·소속', '직무·직책', '업종', '로그인 이메일', '휴대폰', '등록일'],
+    prospects().map(r => { const c = S.allContacts[r.uid] || {}; return [r.name, STAGES[r.stage] || '', ADMITS[r.admit] || '', c.admitInfo ? '받음' : '받지 않음', r.org, r.title, IND[r.industry] || '', c.email || '', c.phone || '', r.createdAt && r.createdAt.toDate ? r.createdAt.toDate().toISOString().slice(0, 10) : '']; }));
+}
 function downloadCSV() {
-  const cell = v => { let s = String(v ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
-  const head = ['이름', '구분', '입학 연도', '기수', '상태', '업종', '직무 분야', '회사·소속', '직무·직책', '총 경력 연차', '주요 경력', '학위논문 제목', '줄 수 있는 것', '필요한 것', '한 줄 소개', '로그인 이메일', '휴대폰', '동의 버전', '등록일'];
+  const cell = csvCell;
+  const head = ['이름', '구분', '현재 신분', '입학 관심', '입학 안내 받기', '입학 연도', '기수', '상태', '업종', '직무 분야', '회사·소속', '직무·직책', '총 경력 연차', '주요 경력', '학위논문 제목', '줄 수 있는 것', '필요한 것', '한 줄 소개', '로그인 이메일', '휴대폰', '동의 버전', '등록일'];
   const st = { approved: '명부', hidden: '내림' };
   const d = ts => (ts && ts.toDate ? ts.toDate().toISOString().slice(0, 10) : '');
-  const lines = S.all.slice().sort((a, b) => orderKey(a) - orderKey(b)).map(r => { const c = S.allContacts[r.uid] || {}; return [r.name, TYPES[r.type] || '', r.year || '', r.cohort || '', st[r.status] || r.status, IND[r.industry], fnText(r), r.org, r.title,
+  const lines = S.all.slice().sort((a, b) => orderKey(a) - orderKey(b)).map(r => { const c = S.allContacts[r.uid] || {}; return [r.name, TYPES[r.type] || '', STAGES[r.stage] || '', ADMITS[r.admit] || '', r.type === 'conf' ? (c.admitInfo ? '받음' : '') : '', r.year || '', r.cohort || '', st[r.status] || r.status, IND[r.industry], fnText(r), r.org, r.title,
     YEARS[r.years] || '', careerList(r).join(' / '), r.thesis || '',
     offerLabels(r).join(', '), needLabels(r).join(', '), r.intro, c.email, c.phone, c.consent ? c.consent.version : '', d(r.createdAt)].map(cell).join(','); });
   const blob = new Blob(['﻿' + [head.map(cell).join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
@@ -1011,8 +1070,8 @@ document.addEventListener('click', async e => {
       case 'logout': await api.logout(); break;
       case 'pick': pick(b); break;
       case 'edit-profile': {
-        const ph = await api.getPhone(S.mid);
-        S.form = formFromMember(S.member, ph); show('form');
+        const pv = await api.getPrivate(S.mid);
+        S.form = formFromMember(S.member, pv); show('form');
         break;
       }
       case 'cancel-edit': S.form = null; nav('me'); break;
@@ -1121,6 +1180,7 @@ document.addEventListener('click', async e => {
       case 'imp-clear': S.imp = null; $('#imp-result').innerHTML = ''; $('#imp-text').value = ''; break;
       case 'reload-admin': show('admin'); break;
       case 'backup': busy(b, true, '파일 만드는 중…'); await loadAdmin(); downloadCSV(); busy(b, false); break;
+      case 'prospect-csv': downloadProspects(); break;
     }
   } catch (err) {
     console.error(err);

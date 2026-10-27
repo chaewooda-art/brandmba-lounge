@@ -1,11 +1,12 @@
 rules_version = '2';
 
-// BM 라운지 보안 규칙 (신청서 방식 · 2판)
+// BM 라운지 보안 규칙 (신청서 방식 · 3판: 학술회 참가자 신분·입학 관심)
 // 등록은 구글 폼 응답을 시트 자동 연동(운영진 계정) 또는 운영진 화면 '직접 가져오기'로 합니다.
 // 이용자 ID는 '로그인 이메일(소문자)'의 SHA-256 값이라, 같은 이메일로 로그인한 사람만 자기 기록과 연결됩니다.
 //  - 프로필(members): 명부에 올라간(approved) 이용자끼리만 볼 수 있음. 등록은 운영진만.
 //  - 이메일(contacts): 명부에 올라간 이용자끼리 공개(신청서 '공개 동의')
-//  - 휴대폰(private): 본인과 운영진만
+//      단, 학부생·입학 관심자(학술회 참가자)는 연결 요청이 수락된 상대의 이메일만 봄
+//  - 휴대폰·입학 안내 동의(private): 본인과 운영진만
 //  - 소개 요청(intros): 보낸 사람과 받은 사람만
 //  - 탈퇴 기록(withdrawn): 다시 가져오기 할 때 되살아나지 않게 남기는 표시(이메일·이름 없음)
 //  - 운영진 목록(admins): Firebase 콘솔에서만 추가·삭제
@@ -32,9 +33,11 @@ service cloud.firestore {
     // 선택지 키: public/js/constants.js 와 같아야 합니다.
     function industryList() { return ['food','beauty','retail','agency','service','mfg','public','etc']; }
     function fnList() { return ['mkt','brand','design','cx','content','sales','strat','ceo','fin','ops','edu','etc']; }
-    function helpList() { return ['brand','design','perf','content','channel','global','invest','hiring','data','mentor','partner']; }
+    function helpList() { return ['brand','design','perf','content','channel','global','invest','hiring','data','mentor','partner','admit']; }
     function typeList() { return ['grad','student','conf']; }
-    function yearsList() { return ['y0','y4','y8','y13','y20']; }
+    function stageList() { return ['work','prof','ugrad','gstu','etc']; }
+    function admitList() { return ['yes','applied','no']; }
+    function yearsList() { return ['none','y0','y4','y8','y13','y20']; }
 
     function textOk(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
     function keysOk(v, allowed) {
@@ -44,11 +47,19 @@ service cloud.firestore {
     function lineOk(c, i) { return c.size() <= i || textOk(c[i], 1, 60); }
     function careerOk(c) { return c is list && c.size() <= 3 && lineOk(c, 0) && lineOk(c, 1) && lineOk(c, 2); }
     function intOrNull(v, min, max) { return v == null || (v is int && v >= min && v <= max); }
+    // 학부생·입학 관심자인 학술회 참가자: 다른 이용자 이메일은 연결이 수락된 뒤에만
+    function limitedData(d) {
+      return d.type == 'conf' && (d.get('stage', null) == 'ugrad' || d.get('admit', null) in ['yes','applied']);
+    }
+    // stage·admit(학술회 참가자의 신분·입학 관심)은 3판에서 추가. 예전 기록에는 없을 수 있음
+    function optIn(d, k, list) { return d.get(k, null) == null || d.get(k, null) in list; }
     function profileOk(d) {
-      return d.keys().hasOnly(['name','type','year','cohort','thesis','org','title','industry','fn','fnEtc','years','career','offer','offerEtc','need','needEtc','intro','status','createdAt','updatedAt'])
+      return d.keys().hasOnly(['name','type','stage','admit','year','cohort','thesis','org','title','industry','fn','fnEtc','years','career','offer','offerEtc','need','needEtc','intro','status','createdAt','updatedAt'])
         && d.keys().hasAll(['name','type','year','cohort','thesis','org','title','industry','fn','fnEtc','years','career','offer','offerEtc','need','needEtc','intro','status','createdAt','updatedAt'])
         && textOk(d.name, 1, 20)
         && d.type in typeList()
+        && optIn(d, 'stage', stageList())
+        && optIn(d, 'admit', admitList())
         && intOrNull(d.year, 1995, 2030)
         && intOrNull(d.cohort, 1, 99)
         && textOk(d.thesis, 0, 100)
@@ -76,9 +87,11 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
 
       allow update: if
-        // 본인: 프로필만 고칠 수 있고 명부 상태와 등록일은 못 바꿈
+        // 본인: 프로필만 고칠 수 있고 명부 상태와 등록일은 못 바꿈.
+        // 학부생·입학 관심자는 스스로 그 표시를 풀 수 없음(구분·신분·입학 관심 변경은 운영진이 신청서로)
         (isMe(mid)
           && profileOk(request.resource.data)
+          && (!limitedData(resource.data) || limitedData(request.resource.data))
           && request.resource.data.status == resource.data.status
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time)
@@ -100,8 +113,14 @@ service cloud.firestore {
         && textOk(d.consent.version, 1, 20)
         && d.consent.at is timestamp;
     }
+    function limited() { return limitedData(get(memberPath(myMid())).data); }
+    // 둘 사이 소개 요청이 수락됨(어느 쪽이 보냈든)
+    function introPath(id) { return /databases/$(database)/documents/intros/$(id); }
+    function acceptedIntro(id) { return exists(introPath(id)) && get(introPath(id)).data.status == 'accepted'; }
+    function linked(mid) { return acceptedIntro(myMid() + '_' + mid) || acceptedIntro(mid + '_' + myMid()); }
+
     match /contacts/{mid} {
-      allow get: if isAdmin() || isMe(mid) || (isApproved() && isApprovedMid(mid));
+      allow get: if isAdmin() || isMe(mid) || (isApproved() && isApprovedMid(mid) && (!limited() || linked(mid)));
       allow list: if isAdmin();
       allow create: if isAdmin() && contactOk(request.resource.data, mid)
         && request.resource.data.consent.at == request.time;
@@ -109,13 +128,14 @@ service cloud.firestore {
       allow delete: if isMe(mid) || isAdmin();
     }
 
-    // ---------- 휴대폰 (운영진과 본인만) ----------
+    // ---------- 휴대폰·입학 안내 동의 (운영진과 본인만) ----------
     match /private/{mid} {
       allow get: if isAdmin() || isMe(mid);
       allow list: if isAdmin();
       allow create, update: if (isAdmin() || isMe(mid))
-        && request.resource.data.keys().hasOnly(['phone'])
-        && textOk(request.resource.data.phone, 0, 20);
+        && request.resource.data.keys().hasOnly(['phone','admitInfo'])
+        && textOk(request.resource.data.phone, 0, 20)
+        && request.resource.data.get('admitInfo', false) is bool;
       allow delete: if isMe(mid) || isAdmin();
     }
 

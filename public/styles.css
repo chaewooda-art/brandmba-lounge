@@ -435,3 +435,9 @@ button.pchip:hover{border-color:var(--crimson)}
 .sc-cta p{max-width:52ch}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* 3판: 운영진 화면 입학 관심자 */
+.prosp{padding:18px;display:grid;gap:10px;margin-bottom:16px;border-left:3px solid var(--crimson)}
+.prosp .sec-head{margin:0}
+.prosp .hint{margin:0}
+.prosp .arow{background:var(--paper)}

@@ -39,7 +39,8 @@ export const HELPS = {
   hiring: '채용·인재 추천',
   data: '데이터 분석',
   mentor: '강연·멘토링',
-  partner: '공동 프로젝트·제휴'
+  partner: '공동 프로젝트·제휴',
+  admit: '입학·진학 상담'
 };
 
 export const TYPES = {
@@ -48,7 +49,26 @@ export const TYPES = {
   conf: '학술회 참가자'
 };
 
+// 학술회 참가자의 현재 신분
+export const STAGES = {
+  work: '직장인·실무자',
+  prof: '교수·연구자',
+  ugrad: '대학생(학부)',
+  gstu: '대학원생',
+  etc: '기타'
+};
+// 학술회 참가자의 브랜드매니지먼트전공 입학 관심
+export const ADMITS = {
+  yes: '관심 있어요',
+  applied: '이미 지원했거나 합격했어요',
+  no: '아니요'
+};
+// 학부생·입학 관심자는 다른 이용자의 이메일을 연결 요청이 수락된 뒤에만 봅니다(firestore.rules 의 limited()).
+export const isLimited = u => !!u && u.type === 'conf' && (u.stage === 'ugrad' || u.admit === 'yes' || u.admit === 'applied');
+export const isProspect = u => !!u && u.type === 'conf' && (u.admit === 'yes' || u.admit === 'applied');
+
 export const YEARS = {
+  none: '경력 없음(학생)',
   y0: '3년 이하',
   y4: '4~7년',
   y8: '8~12년',
@@ -82,6 +102,9 @@ export const FORM_COLUMNS = {
   offer: '내가 줄 수 있는 것',
   need: '내가 필요한 것',
   intro: '한 줄 소개',
+  stage: '현재 신분',
+  admit: '입학 관심',
+  admitInfo: '입학 안내 받기',
   phone: '휴대폰',
   agreeMap: '공개 동의',
   agreePriv: '개인정보 수집·이용 동의',
@@ -89,3 +112,4 @@ export const FORM_COLUMNS = {
   synced: '라운지 반영'
 };
 export const AGREE = '동의합니다';
+export const ADMIT_INFO_YES = '받을게요';

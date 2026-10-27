@@ -38,9 +38,11 @@ const IND_W = [['food', 9], ['beauty', 9], ['retail', 8], ['agency', 10], ['serv
 
 function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const R = rng(20261027);
+const R2 = rng(1027); // 학술회 참가자의 신분·입학 관심용(다른 값의 순서를 바꾸지 않게 따로)
 const pick = a => a[Math.floor(R() * a.length)];
 const wpick = w => { let x = R() * w.reduce((s, [, n]) => s + n, 0); for (const [k, n] of w) { if ((x -= n) < 0) return k; } return w[0][0]; };
 const some = (a, n) => { const c = a.slice(), o = []; while (o.length < n && c.length) o.push(c.splice(Math.floor(R() * c.length), 1)[0]); return o; };
+const wpick2 = w => { let x = R2() * w.reduce((s, [, n]) => s + n, 0); for (const [k, n] of w) { if ((x -= n) < 0) return k; } return w[0][0]; };
 const yearsOf = y => { const e = 2026 - y + 4; return e <= 3 ? 'y0' : e <= 7 ? 'y4' : e <= 12 ? 'y8' : e <= 19 ? 'y13' : 'y20'; };
 
 function make(i, o = {}) {
@@ -54,11 +56,18 @@ function make(i, o = {}) {
   const career = o.career || (R() < .55 ? some(prev, R() < .4 ? 2 : 1).map(c => `${c} · ${pick(TITLE[pick(Object.keys(TITLE))])} · ${2005 + Math.floor(R() * 12)}–${2014 + Math.floor(R() * 10)}`) : []);
   const offer = o.offer || some(HELP_KEYS, 1 + Math.floor(R() * 3));
   const need = o.need || some(HELP_KEYS.filter(k => !offer.includes(k)), 1 + Math.floor(R() * 2));
+  const conf = type === 'conf';
+  const stage = conf ? (o.stage || wpick2([['work', 55], ['prof', 12], ['ugrad', 18], ['gstu', 10], ['etc', 5]])) : null;
+  const admit = conf ? (o.admit || wpick2([['yes', 30], ['applied', 5], ['no', 65]])) : null;
+  const ugrad = stage === 'ugrad' && !o.org;
+  // 입학 관심자는 '입학·진학 상담'이 필요하고, 재학생·졸업생 일부는 그걸 줄 수 있음
+  if (!o.need && conf && admit !== 'no' && !need.includes('admit')) need.splice(0, need.length >= 2 ? 1 : 0, 'admit');
+  if (!o.offer && !conf && R2() < .14 && offer.length < 3) offer.push('admit');
   return {
-    uid: 'demo-' + i, name: SUR[i % SUR.length] + '○○', type, year, cohort,
+    uid: 'demo-' + i, name: SUR[i % SUR.length] + '○○', type, stage, admit, year, cohort,
     thesis: type === 'grad' ? (o.thesis ?? (R() < .4 ? pick(THESIS) : '')) : '',
-    org, title: o.title || pick(TITLE[fn[0]] || TITLE.brand), industry, fn, fnEtc: o.fnEtc || '',
-    years: o.years || (year ? yearsOf(year) : pick(['y8', 'y13', 'y20'])), career,
+    org: ugrad ? '○○대학교' : org, title: ugrad ? '경영학과 학부생' : (o.title || pick(TITLE[fn[0]] || TITLE.brand)), industry, fn, fnEtc: o.fnEtc || '',
+    years: ugrad ? 'none' : (o.years || (year ? yearsOf(year) : pick(['y8', 'y13', 'y20']))), career: ugrad ? [] : career,
     offer, offerEtc: o.offerEtc || '', need, needEtc: o.needEtc || '', intro: o.intro ?? pick(INTRO), status: 'approved'
   };
 }
@@ -67,22 +76,24 @@ function make(i, o = {}) {
 export const DEMO_PERSONAS = [
   { uid: 'demo-0', label: '재학생 · 뷰티 마케터' },
   { uid: 'demo-1', label: '졸업생 · 식품 브랜드매니저' },
-  { uid: 'demo-2', label: '학술회 참가자 · 교수' }
+  { uid: 'demo-2', label: '학술회 참가자 · 교수' },
+  { uid: 'demo-13', label: '학부생 · 입학 관심' }
 ];
 const FIXED = [
-  { type: 'student', year: 2025, industry: 'beauty', fn: ['mkt', 'content'], org: '노바스킨', title: '그로스 마케터', offer: ['content', 'perf'], need: ['channel', 'invest', 'mentor'], career: ['람다커머스 · 마케팅 매니저 · 2019–2024'], intro: '스킨케어 브랜드를 키우고 있어요.' },
+  { type: 'student', year: 2025, industry: 'beauty', fn: ['mkt', 'content'], org: '노바스킨', title: '그로스 마케터', offer: ['content', 'perf', 'admit'], need: ['channel', 'invest', 'mentor'], career: ['람다커머스 · 마케팅 매니저 · 2019–2024'], intro: '스킨케어 브랜드를 키우고 있어요.' },
   { type: 'grad', year: 2010, industry: 'food', fn: ['brand'], org: '알파식품', title: '브랜드매니저', offer: ['channel', 'mentor'], need: ['design', 'global'], thesis: '팝업스토어 경험이 브랜드 애착에 미치는 영향', career: ['베타푸드 · 마케터 · 2006–2011'] },
-  { type: 'conf', industry: 'etc', fn: ['edu'], org: '○○대학교', title: '교수', offer: ['mentor', 'data'], need: ['partner'], needEtc: '공동 연구', intro: '소비자 경험을 연구합니다.' },
+  { type: 'conf', stage: 'prof', admit: 'no', industry: 'etc', fn: ['edu'], org: '○○대학교', title: '교수', offer: ['mentor', 'data'], need: ['partner'], needEtc: '공동 연구', intro: '소비자 경험을 연구합니다.' },
   { type: 'grad', year: 2006, industry: 'retail', fn: ['sales'], org: '뮤백화점', title: '바이어', offer: ['channel'], need: ['brand', 'content'], career: ['카파리테일 · MD · 2004–2012'] },
   { type: 'grad', year: 2004, industry: 'public', fn: ['fin'], org: '써니캐피탈', title: '투자심사역', offer: ['invest', 'mentor'], need: ['brand'] },
-  { type: 'grad', year: 2016, industry: 'beauty', fn: ['brand', 'design'], org: '델타뷰티', title: 'BM 팀장', offer: ['design', 'brand'], need: ['perf'], career: ['노바스킨 · BX 디자이너 · 2014–2019'] },
+  { type: 'grad', year: 2016, industry: 'beauty', fn: ['brand', 'design'], org: '델타뷰티', title: 'BM 팀장', offer: ['design', 'brand', 'admit'], need: ['perf', 'content'], career: ['노바스킨 · BX 디자이너 · 2014–2019'] },
   { type: 'grad', year: 2012, industry: 'agency', fn: ['design'], org: '세타디자인', title: '디자인 디렉터', offer: ['design'], need: ['hiring', 'partner'], career: ['알파식품 · BX 디자이너 · 2009–2014'] },
-  { type: 'conf', industry: 'service', fn: ['strat'], org: '누플랫폼', title: '사업개발 리드', offer: ['global', 'partner'], need: ['data'], offerEtc: '해외 판로' },
+  { type: 'conf', stage: 'work', admit: 'yes', industry: 'service', fn: ['strat'], org: '누플랫폼', title: '사업개발 리드', offer: ['global', 'partner'], need: ['data', 'admit'], offerEtc: '해외 판로' },
   { type: 'grad', year: 2002, industry: 'food', fn: ['ceo'], org: '루나베이커리', title: '대표', offer: ['mentor', 'partner'], need: ['perf', 'content'], thesis: '로컬 브랜드의 진정성과 지역 애착', career: ['알파식품 · 브랜드매니저 · 2001–2010'] },
   { type: 'student', year: 2026, industry: 'agency', fn: ['brand'], org: '제타브랜딩', title: '브랜드 컨설턴트', offer: ['brand'], need: ['mentor', 'channel'], offerEtc: '공간 브랜딩' },
   { type: 'grad', year: 2018, industry: 'service', fn: ['cx', 'ops'], org: '이오타테크', title: 'CX 리드', offer: ['data', 'content'], need: ['brand'], thesis: 'MZ세대 고객경험과 재방문 의도' },
-  { type: 'conf', industry: 'public', fn: ['content'], org: '타우공사', title: '홍보 매니저', offer: ['partner'], need: ['design', 'content'] },
-  { type: 'grad', year: 2008, industry: 'etc', fn: ['edu', 'brand'], org: '한빛컨설팅', title: '연구소장', offer: ['data', 'mentor'], offerEtc: '공동 연구', need: ['partner', 'data'], thesis: '브랜드 진정성과 팬덤 커뮤니티 옹호', intro: '현장 사례로 연구합니다.' }
+  { type: 'conf', stage: 'work', admit: 'no', industry: 'public', fn: ['content'], org: '타우공사', title: '홍보 매니저', offer: ['partner'], need: ['design', 'content'] },
+  { type: 'grad', year: 2008, industry: 'etc', fn: ['edu', 'brand'], org: '한빛컨설팅', title: '연구소장', offer: ['data', 'mentor'], offerEtc: '공동 연구', need: ['partner', 'data'], thesis: '브랜드 진정성과 팬덤 커뮤니티 옹호', intro: '현장 사례로 연구합니다.' },
+  { type: 'conf', stage: 'ugrad', admit: 'yes', industry: 'beauty', fn: ['mkt', 'brand'], org: '○○대학교', title: '경영학과 4학년', years: 'none', career: [], offer: ['content'], need: ['admit', 'hiring', 'mentor'], intro: '뷰티 브랜드 마케터를 꿈꾸는 학부생입니다.' }
 ];
 export const DEMO_MEMBERS = (() => {
   const out = FIXED.map((o, i) => make(i, o));

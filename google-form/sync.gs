@@ -21,17 +21,21 @@ const TZ = 'Asia/Seoul';
 // 선택지: 영문 키 → 신청서 글자 (public/js/constants.js 와 같음)
 const S_IND = { food: '식품·외식', beauty: '뷰티·패션', retail: '유통·커머스', agency: '브랜드·광고 에이전시', service: 'IT·통신·서비스', mfg: '제조·건설', public: '금융·공공', etc: '기타' };
 const S_FN = { mkt: '마케팅', brand: '브랜드 전략', design: '디자인', cx: '고객경험·BX', content: '콘텐츠·PR', sales: '영업·MD', strat: '전략·사업기획', ceo: '경영(대표)', fin: '재무·투자', ops: '운영·시스템', edu: '교육·HR', etc: '기타' };
-const S_HELP = { brand: '브랜드 전략 자문', design: '디자인·BX', perf: '퍼포먼스 마케팅', content: '콘텐츠·SNS', channel: '유통 채널 연결', global: '해외 진출', invest: '투자·재무', hiring: '채용·인재 추천', data: '데이터 분석', mentor: '강연·멘토링', partner: '공동 프로젝트·제휴' };
+const S_HELP = { brand: '브랜드 전략 자문', design: '디자인·BX', perf: '퍼포먼스 마케팅', content: '콘텐츠·SNS', channel: '유통 채널 연결', global: '해외 진출', invest: '투자·재무', hiring: '채용·인재 추천', data: '데이터 분석', mentor: '강연·멘토링', partner: '공동 프로젝트·제휴', admit: '입학·진학 상담' };
 const S_TYPES = { grad: '졸업생', student: '재학생', conf: '학술회 참가자' };
-const S_YEARS = { y0: '3년 이하', y4: '4~7년', y8: '8~12년', y13: '13~19년', y20: '20년 이상' };
+const S_STAGES = { work: '직장인·실무자', prof: '교수·연구자', ugrad: '대학생(학부)', gstu: '대학원생', etc: '기타' };
+const S_ADMITS = { yes: '관심 있어요', applied: '이미 지원했거나 합격했어요', no: '아니요' };
+const S_YEARS = { none: '경력 없음(학생)', y0: '3년 이하', y4: '4~7년', y8: '8~12년', y13: '13~19년', y20: '20년 이상' };
 // 열 제목 (FORM_COLUMNS 와 같음)
 const S_COL = {
   email: '이메일 주소', type: '구분', name: '이름', thesis: '학위논문 제목', year: '입학 연도', cohort: '기수',
   org: '회사·소속', title: '직무·직책', industry: '업종', fn: '직무 분야', years: '총 경력 연차', career: '주요 경력',
-  offer: '내가 줄 수 있는 것', need: '내가 필요한 것', intro: '한 줄 소개', phone: '휴대폰',
+  offer: '내가 줄 수 있는 것', need: '내가 필요한 것', intro: '한 줄 소개',
+  stage: '현재 신분', admit: '입학 관심', admitInfo: '입학 안내 받기', phone: '휴대폰',
   agreeMap: '공개 동의', agreePriv: '개인정보 수집·이용 동의', approve: '승인', synced: '라운지 반영'
 };
 const AGREE_TEXT = '동의합니다';
+const S_ADMIT_INFO_YES = '받을게요';
 
 /* ---------- 처음 설정 ---------- */
 function setupSync() {
@@ -91,7 +95,7 @@ function onNewResponse(e) {
   if (!me) return;
   MailApp.sendEmail(me, '[BM 라운지] 새 신청 · ' + v('name') + ' (' + v('type') + ')',
     v('name') + ' 님이 라운지 신청서를 냈습니다.\n' +
-    '구분: ' + v('type') + '\n회사·직책: ' + v('org') + ' · ' + v('title') + '\n이메일: ' + v('email') + '\n\n' +
+    '구분: ' + v('type') + (v('stage') ? ' · ' + v('stage') : '') + (v('admit') ? ' · 입학 관심: ' + v('admit') : '') + '\n회사·직책: ' + v('org') + ' · ' + v('title') + '\n이메일: ' + v('email') + '\n\n' +
     '응답 시트에서 확인한 뒤 ‘승인’을 체크하면 바로 라운지에 반영됩니다.\n' + sheetFile_().getUrl());
 }
 
@@ -127,7 +131,7 @@ function syncRow_(cell) {
     { update: { name: DOCS + '/members/' + mid, fields: fields }, updateTransforms: now },
     { update: { name: DOCS + '/contacts/' + mid, fields: toFields_({ email: x.email, consent: { map: true, privacy: true, version: POLICY_VERSION, via: 'google-form' } }) },
       updateTransforms: [{ fieldPath: 'consent.at', setToServerValue: 'REQUEST_TIME' }] },
-    { update: { name: DOCS + '/private/' + mid, fields: toFields_({ phone: x.phone }) } }
+    { update: { name: DOCS + '/private/' + mid, fields: toFields_({ phone: x.phone, admitInfo: x.admitInfo }) } }
   ];
   const r = fs_('post', DOCS + ':commit', { writes: writes });
   if (r.code !== 200) throw new Error('저장 실패(' + r.code + '): ' + r.text.slice(0, 160));
@@ -152,6 +156,10 @@ function parseRow_(cell) {
     const c = cell('cohort').replace(/기$/, '');
     if (c) { if (/^\d{1,2}$/.test(c) && +c >= 1 && +c <= 99) cohort = +c; else errs.push('기수 ‘' + c + '’ 확인 필요'); }
   }
+  // 학술회 참가자: 현재 신분·입학 관심(3판에 추가된 질문이라 비어 있으면 null), 입학 안내 받기(선택)
+  const stage = type === 'conf' ? keyOf(S_STAGES, cell('stage')) : null;
+  const admit = type === 'conf' ? keyOf(S_ADMITS, cell('admit')) : null;
+  const admitInfo = type === 'conf' && cell('admitInfo').indexOf(S_ADMIT_INFO_YES) >= 0;
   const thesis = type === 'grad' ? cell('thesis').slice(0, 100) : '';
   const org = cell('org').slice(0, 40), title = cell('title').slice(0, 40);
   if (!org) errs.push('회사·소속 없음');
@@ -178,8 +186,8 @@ function parseRow_(cell) {
   let phone = cell('phone').slice(0, 20);
   if (/^1\d{8,9}$/.test(phone)) phone = '0' + phone;
   return {
-    errs: errs, email: email, phone: phone,
-    profile: { name: name, type: type, year: year, cohort: cohort, thesis: thesis, org: org, title: title, industry: industry,
+    errs: errs, email: email, phone: phone, admitInfo: admitInfo,
+    profile: { name: name, type: type, stage: stage, admit: admit, year: year, cohort: cohort, thesis: thesis, org: org, title: title, industry: industry,
       fn: fn.keys, fnEtc: fn.etc, years: years, career: career, offer: offer.keys, offerEtc: offer.etc, need: need.keys, needEtc: need.etc, intro: intro }
   };
 }

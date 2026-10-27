@@ -13,7 +13,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where,
-  getDocs, onSnapshot, serverTimestamp, writeBatch
+  getDocs, onSnapshot, serverTimestamp, writeBatch, deleteField
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { firebaseConfig, POLICY_VERSION } from './config.js';
 
@@ -79,14 +79,15 @@ export function watchMember(mid, cb, onError) {
   }, onError);
 }
 
-export const PROFILE_KEYS = ['name', 'type', 'stage', 'admit', 'year', 'cohort', 'thesis', 'org', 'title', 'industry', 'fn', 'fnEtc', 'years', 'career', 'offer', 'offerEtc', 'need', 'needEtc', 'intro'];
+export const PROFILE_KEYS = ['name', 'type', 'stage', 'admit', 'year', 'cohort', 'org', 'title', 'industry', 'fn', 'fnEtc', 'years', 'career', 'offer', 'offerEtc', 'need', 'needEtc', 'intro'];
 // stage·admit 은 학술회 참가자만. 예전 기록에는 없을 수 있어 null 로 채웁니다.
 const pickProfile = p => Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k] === undefined ? null : p[k]]));
 
 // 프로필과 운영진만 보는 정보(휴대폰, 입학 안내 동의)를 함께 저장
 export async function saveProfile(mid, profile, phone, admitInfo) {
   const b = writeBatch(db);
-  b.update(doc(db, 'members', mid), { ...pickProfile(profile), updatedAt: serverTimestamp() });
+  // thesis: 예전에 받던 학위논문 제목. 더 쓰지 않으므로 저장할 때 지웁니다.
+  b.update(doc(db, 'members', mid), { ...pickProfile(profile), thesis: deleteField(), updatedAt: serverTimestamp() });
   b.set(doc(db, 'private', mid), { phone: phone || '', admitInfo: !!admitInfo }, { merge: true });
   await b.commit();
 }

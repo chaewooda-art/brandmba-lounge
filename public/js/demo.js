@@ -20,12 +20,6 @@ const TITLE = {
   strat: ['전략기획 매니저', '사업개발 리드'], ceo: ['대표', '공동창업자'], fin: ['투자심사역', '재무 팀장'],
   ops: ['운영 매니저', 'PM'], edu: ['교수', 'HR 리드', '강사']
 };
-const THESIS = [
-  '팝업스토어 경험이 브랜드 애착에 미치는 영향', '라이브커머스 신뢰가 구매 의도에 미치는 영향', 'ESG 활동과 브랜드 진정성 인식',
-  'MZ세대 고객경험과 재방문 의도', '브랜드 세계관 콘텐츠의 몰입 효과', '공간 브랜딩이 상권 활성화에 미치는 영향',
-  '로컬 브랜드의 진정성과 지역 애착', '구독 서비스 고객경험과 해지 의도', '디자인 일관성이 브랜드 신뢰에 미치는 영향',
-  '팬덤 커뮤니티 참여와 브랜드 옹호', 'AI 추천 경험과 고객 만족', '친환경 패키지와 구매 의도'
-];
 const INTRO = ['브랜드를 오래 가게 만드는 일을 합니다.', '좋은 제품을 더 많은 사람에게 알리는 중입니다.', '해외 시장을 함께 볼 동문을 찾아요.',
   '데이터로 고객을 이해하는 일을 좋아합니다.', '공간과 경험을 설계합니다.', '선후배와 프로젝트를 같이 해 보고 싶어요.', ''];
 const HELP_KEYS = ['brand', 'design', 'perf', 'content', 'channel', 'global', 'invest', 'hiring', 'data', 'mentor', 'partner'];
@@ -65,7 +59,6 @@ function make(i, o = {}) {
   if (!o.offer && !conf && R2() < .14 && offer.length < 3) offer.push('admit');
   return {
     uid: 'demo-' + i, name: SUR[i % SUR.length] + '○○', type, stage, admit, year, cohort,
-    thesis: type === 'grad' ? (o.thesis ?? (R() < .4 ? pick(THESIS) : '')) : '',
     org: ugrad ? '○○대학교' : org, title: ugrad ? '경영학과 학부생' : (o.title || pick(TITLE[fn[0]] || TITLE.brand)), industry, fn, fnEtc: o.fnEtc || '',
     years: ugrad ? 'none' : (o.years || (year ? yearsOf(year) : pick(['y8', 'y13', 'y20']))), career: ugrad ? [] : career,
     offer, offerEtc: o.offerEtc || '', need, needEtc: o.needEtc || '', intro: o.intro ?? pick(INTRO), status: 'approved'
@@ -81,18 +74,18 @@ export const DEMO_PERSONAS = [
 ];
 const FIXED = [
   { type: 'student', year: 2025, industry: 'beauty', fn: ['mkt', 'content'], org: '노바스킨', title: '그로스 마케터', offer: ['content', 'perf', 'admit'], need: ['channel', 'invest', 'mentor'], career: ['람다커머스 · 마케팅 매니저 · 2019–2024'], intro: '스킨케어 브랜드를 키우고 있어요.' },
-  { type: 'grad', year: 2010, industry: 'food', fn: ['brand'], org: '알파식품', title: '브랜드매니저', offer: ['channel', 'mentor'], need: ['design', 'global'], thesis: '팝업스토어 경험이 브랜드 애착에 미치는 영향', career: ['베타푸드 · 마케터 · 2006–2011'] },
+  { type: 'grad', year: 2010, industry: 'food', fn: ['brand'], org: '알파식품', title: '브랜드매니저', offer: ['channel', 'mentor'], need: ['design', 'global'], career: ['베타푸드 · 마케터 · 2006–2011'] },
   { type: 'conf', stage: 'prof', admit: 'no', industry: 'etc', fn: ['edu'], org: '○○대학교', title: '교수', offer: ['mentor', 'data'], need: ['partner'], needEtc: '공동 연구', intro: '소비자 경험을 연구합니다.' },
   { type: 'grad', year: 2006, industry: 'retail', fn: ['sales'], org: '뮤백화점', title: '바이어', offer: ['channel'], need: ['brand', 'content'], career: ['카파리테일 · MD · 2004–2012'] },
   { type: 'grad', year: 2004, industry: 'public', fn: ['fin'], org: '써니캐피탈', title: '투자심사역', offer: ['invest', 'mentor'], need: ['brand'] },
   { type: 'grad', year: 2016, industry: 'beauty', fn: ['brand', 'design'], org: '델타뷰티', title: 'BM 팀장', offer: ['design', 'brand', 'admit'], need: ['perf', 'content'], career: ['노바스킨 · BX 디자이너 · 2014–2019'] },
   { type: 'grad', year: 2012, industry: 'agency', fn: ['design'], org: '세타디자인', title: '디자인 디렉터', offer: ['design'], need: ['hiring', 'partner'], career: ['알파식품 · BX 디자이너 · 2009–2014'] },
   { type: 'conf', stage: 'work', admit: 'yes', industry: 'service', fn: ['strat'], org: '누플랫폼', title: '사업개발 리드', offer: ['global', 'partner'], need: ['data', 'admit'], offerEtc: '해외 판로' },
-  { type: 'grad', year: 2002, industry: 'food', fn: ['ceo'], org: '루나베이커리', title: '대표', offer: ['mentor', 'partner'], need: ['perf', 'content'], thesis: '로컬 브랜드의 진정성과 지역 애착', career: ['알파식품 · 브랜드매니저 · 2001–2010'] },
+  { type: 'grad', year: 2002, industry: 'food', fn: ['ceo'], org: '루나베이커리', title: '대표', offer: ['mentor', 'partner'], need: ['perf', 'content'], career: ['알파식품 · 브랜드매니저 · 2001–2010'] },
   { type: 'student', year: 2026, industry: 'agency', fn: ['brand'], org: '제타브랜딩', title: '브랜드 컨설턴트', offer: ['brand'], need: ['mentor', 'channel'], offerEtc: '공간 브랜딩' },
-  { type: 'grad', year: 2018, industry: 'service', fn: ['cx', 'ops'], org: '이오타테크', title: 'CX 리드', offer: ['data', 'content'], need: ['brand'], thesis: 'MZ세대 고객경험과 재방문 의도' },
+  { type: 'grad', year: 2018, industry: 'service', fn: ['cx', 'ops'], org: '이오타테크', title: 'CX 리드', offer: ['data', 'content'], need: ['brand'] },
   { type: 'conf', stage: 'work', admit: 'no', industry: 'public', fn: ['content'], org: '타우공사', title: '홍보 매니저', offer: ['partner'], need: ['design', 'content'] },
-  { type: 'grad', year: 2008, industry: 'etc', fn: ['edu', 'brand'], org: '한빛컨설팅', title: '연구소장', offer: ['data', 'mentor'], offerEtc: '공동 연구', need: ['partner', 'data'], thesis: '브랜드 진정성과 팬덤 커뮤니티 옹호', intro: '현장 사례로 연구합니다.' },
+  { type: 'grad', year: 2008, industry: 'etc', fn: ['edu', 'brand'], org: '한빛컨설팅', title: '연구소장', offer: ['data', 'mentor'], offerEtc: '공동 연구', need: ['partner', 'data'], intro: '현장 사례로 연구합니다.' },
   { type: 'conf', stage: 'ugrad', admit: 'yes', industry: 'beauty', fn: ['mkt', 'brand'], org: '○○대학교', title: '경영학과 4학년', years: 'none', career: [], offer: ['content'], need: ['admit', 'hiring', 'mentor'], intro: '뷰티 브랜드 마케터를 꿈꾸는 학부생입니다.' }
 ];
 export const DEMO_MEMBERS = (() => {

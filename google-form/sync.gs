@@ -28,7 +28,7 @@ const S_ADMITS = { yes: '관심 있어요', applied: '이미 지원했거나 합
 const S_YEARS = { none: '경력 없음(학생)', y0: '3년 이하', y4: '4~7년', y8: '8~12년', y13: '13~19년', y20: '20년 이상' };
 // 열 제목 (FORM_COLUMNS 와 같음)
 const S_COL = {
-  email: '이메일 주소', type: '구분', name: '이름', thesis: '학위논문 제목', year: '입학 연도', cohort: '기수',
+  email: '이메일 주소', type: '구분', name: '이름', year: '입학 연도', cohort: '기수',
   org: '회사·소속', title: '직무·직책', industry: '업종', fn: '직무 분야', years: '총 경력 연차', career: '주요 경력',
   offer: '내가 줄 수 있는 것', need: '내가 필요한 것', intro: '한 줄 소개',
   stage: '현재 신분', admit: '입학 관심', admitInfo: '입학 안내 받기', phone: '휴대폰',
@@ -125,8 +125,6 @@ function syncRow_(cell) {
   if (!isNew && ex.code !== 200) throw new Error('라운지 확인 실패(' + ex.code + ')');
   const fields = toFields_(Object.assign({}, x.profile, { status: isNew ? 'approved' : ((ex.json.fields.status || {}).stringValue || 'approved') }));
   if (!isNew && ex.json.fields.createdAt) fields.createdAt = ex.json.fields.createdAt;
-  // 신청서에는 학위논문 질문이 없음: 라운지에서 적은 논문 제목은 그대로 둠
-  if (!isNew && x.profile.type === 'grad' && !x.profile.thesis && ex.json.fields.thesis) fields.thesis = ex.json.fields.thesis;
   const now = [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }];
   if (isNew || !ex.json.fields.createdAt) now.push({ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' });
   const writes = [
@@ -162,7 +160,6 @@ function parseRow_(cell) {
   const stage = type === 'conf' ? keyOf(S_STAGES, cell('stage')) : null;
   const admit = type === 'conf' ? keyOf(S_ADMITS, cell('admit')) : null;
   const admitInfo = type === 'conf' && cell('admitInfo').indexOf(S_ADMIT_INFO_YES) >= 0;
-  const thesis = type === 'grad' ? cell('thesis').slice(0, 100) : '';
   const org = cell('org').slice(0, 40), title = cell('title').slice(0, 40);
   if (!org) errs.push('회사·소속 없음');
   if (!title) errs.push('직무·직책 없음');
@@ -189,7 +186,7 @@ function parseRow_(cell) {
   if (/^1\d{8,9}$/.test(phone)) phone = '0' + phone;
   return {
     errs: errs, email: email, phone: phone, admitInfo: admitInfo,
-    profile: { name: name, type: type, stage: stage, admit: admit, year: year, cohort: cohort, thesis: thesis, org: org, title: title, industry: industry,
+    profile: { name: name, type: type, stage: stage, admit: admit, year: year, cohort: cohort, org: org, title: title, industry: industry,
       fn: fn.keys, fnEtc: fn.etc, years: years, career: career, offer: offer.keys, offerEtc: offer.etc, need: need.keys, needEtc: need.etc, intro: intro }
   };
 }

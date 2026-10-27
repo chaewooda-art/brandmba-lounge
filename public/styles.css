@@ -359,7 +359,7 @@ input:focus,textarea:focus{border-color:var(--crimson);outline:none;box-shadow:0
 
 a.nv-btn{text-decoration:none;display:inline-flex;align-items:center}
 
-/* ---------- 경력·논문 ---------- */
+/* ---------- 경력 ---------- */
 .career{list-style:none;padding:0;display:grid;gap:2px}
 .career li{padding-left:14px;position:relative}
 .career li::before{content:"";position:absolute;left:2px;top:.72em;width:5px;height:5px;border-radius:50%;background:var(--crimson)}
@@ -386,7 +386,6 @@ a.nv-btn{text-decoration:none;display:inline-flex;align-items:center}
 .why .w-give::before{content:"→";color:var(--crimson)}
 .why .w-co::before{content:"◆";color:var(--warn);font-size:.66rem;top:7px}
 .why .w-ind::before,.why .w-fn::before{content:"●";color:var(--muted);font-size:.6rem;top:8px}
-.why .w-thesis::before{content:"✎";color:var(--ok)}
 .why .w-senior::before,.why .w-junior::before{content:"↕";color:var(--ok)}
 .rel .why li{background:var(--surface)}
 .rel-h{font-weight:600;font-size:.84rem;color:var(--crimson)}

@@ -79,7 +79,6 @@ export const YEARS = {
 export const MAX_PICK = 3;
 export const MAX_CAREER = 3;      // 주요 경력 줄 수
 export const CAREER_LEN = 60;     // 경력 한 줄 글자 수
-export const THESIS_LEN = 100;    // 논문 제목 글자 수
 export const ETC_LEN = 60;        // '기타' 직접 입력 글자 수
 export const YEAR_MIN = 1995, YEAR_MAX = 2030; // 입학 연도 범위
 export const COHORT_MAX = 99;
@@ -90,7 +89,6 @@ export const FORM_COLUMNS = {
   email: '이메일 주소',          // 구글 로그인 계정 이메일(폼이 자동 수집)
   type: '구분',
   name: '이름',
-  thesis: '학위논문 제목',
   year: '입학 연도',
   cohort: '기수',
   org: '회사·소속',

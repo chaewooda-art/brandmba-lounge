@@ -53,16 +53,17 @@ service cloud.firestore {
     }
     // stage·admit(학술회 참가자의 신분·입학 관심)은 3판에서 추가. 예전 기록에는 없을 수 있음
     function optIn(d, k, list) { return d.get(k, null) == null || d.get(k, null) in list; }
+    // thesis(학위논문 제목)는 더 받지 않음. 예전 기록에 남아 있을 수 있어 있으면 허용만(새로 쓰는 화면·연동은 넣지 않음)
     function profileOk(d) {
       return d.keys().hasOnly(['name','type','stage','admit','year','cohort','thesis','org','title','industry','fn','fnEtc','years','career','offer','offerEtc','need','needEtc','intro','status','createdAt','updatedAt'])
-        && d.keys().hasAll(['name','type','year','cohort','thesis','org','title','industry','fn','fnEtc','years','career','offer','offerEtc','need','needEtc','intro','status','createdAt','updatedAt'])
+        && d.keys().hasAll(['name','type','year','cohort','org','title','industry','fn','fnEtc','years','career','offer','offerEtc','need','needEtc','intro','status','createdAt','updatedAt'])
         && textOk(d.name, 1, 20)
         && d.type in typeList()
         && optIn(d, 'stage', stageList())
         && optIn(d, 'admit', admitList())
         && intOrNull(d.year, 1995, 2030)
         && intOrNull(d.cohort, 1, 99)
-        && textOk(d.thesis, 0, 100)
+        && textOk(d.get('thesis', ''), 0, 100)
         && textOk(d.org, 1, 40)
         && textOk(d.title, 1, 40)
         && d.industry in industryList()

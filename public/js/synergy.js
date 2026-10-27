@@ -6,7 +6,6 @@
 //  - 내가 상대가 필요한 것을 줄 수 있음   항목당 2점
 //  - 같은 회사를 거침(현재 소속 + 주요 경력) 3점
 //  - 동종업계(같은 업종)                 1.5점
-//  - 논문 주제 낱말이 겹침               1.5점
 //  - 같은 직무 분야(하나라도 겹침)        1점
 //  - 같은 업종·직무의 선배/후배(재학생↔졸업생) 1점 / 0.5점
 //  - 동문 ↔ 학술회 참가자가 같은 업종·직무   0.5점(두 모임을 잇는 연결)
@@ -41,24 +40,6 @@ export function companies(m) {
   return out;
 }
 
-/* ---------- 논문 제목 낱말 ---------- */
-const STOP = new Set(['연구', '영향', '관한', '대한', '미치는', '중심', '중심으로', '분석', '효과', '사례', '관계', '매개', '조절',
-  '역할', '실증', '기반', '활용', '통한', '따른', '방안', '전략', '요인', '인식', '차이', '비교', '고찰', '탐색', '개발', '적용',
-  '검증', '측정', '모형', '모델', '이용', '소비자', '브랜드', '브랜딩', '기업', '국내', '한국', '경우', '위한', '통해', '관점',
-  '효과성', '결정요인', '마케팅', '경영', '중요성', '변화', '현황', '개선', '경험', '고객', '의도', '구매', '만족', '신뢰', '애착', '참여', '활동',
-  'the', 'of', 'and', 'on', 'for', 'to', 'with', 'in', 'a', 'an', 'study', 'effect', 'effects', 'impact', 'brand', 'brands', 'case', 'analysis']);
-const JOSA = /(으로서|으로써|으로|에서의|에서|에게|에의|과의|와의|이라는|라는|이며|에|의|을|를|이|가|은|는|과|와|로|및|도|적)$/;
-export function thesisWords(m) {
-  const out = new Set();
-  String(m.thesis || '').toLowerCase().split(/[^0-9a-z가-힣]+/).forEach(w => {
-    if (!w) return;
-    const cut = w.replace(JOSA, '');
-    const word = cut.length >= 2 ? cut : w;
-    if (word.length >= 2 && !STOP.has(word)) out.add(word);
-  });
-  return out;
-}
-
 /* ---------- 두 사람 사이 ---------- */
 // me 기준으로 o 와의 시너지. { score, reasons: [{ k, t }] }
 export function synergy(me, o, cache = new Map()) {
@@ -73,9 +54,6 @@ export function synergy(me, o, cache = new Map()) {
   if (same.length) { s += 3; R.push({ k: 'co', t: `같은 회사 출신 · ${same[0]}` }); }
   const sameInd = me.industry && me.industry === o.industry && me.industry !== 'etc';
   if (sameInd) { s += 1.5; R.push({ k: 'ind', t: `동종업계 · ${IND[o.industry] || ''}` }); }
-  const tw = memo(me, ':th', thesisWords), ow = memo(o, ':th', thesisWords);
-  const shared = [...ow].filter(w => tw.has(w));
-  if (shared.length) { s += 1.5; R.push({ k: 'thesis', t: `논문 주제가 겹쳐요 · ${shared.slice(0, 2).join(', ')}` }); }
   const fns = inter(fnTokens(me), fnTokens(o)).filter(k => k !== 'etc');
   if (fns.length) { s += 1; R.push({ k: 'fn', t: `같은 직무 · ${fns.slice(0, 2).map(fnLabel).join(', ')}` }); }
   const near = sameInd || fns.length > 0;

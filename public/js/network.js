@@ -21,7 +21,7 @@ function sprite(rgb) {
 }
 
 export function mountNetwork(root, opts) {
-  const { members, meUid, dict, onProfile, onIntro, onSelect, initialSel, demo } = opts;
+  const { members, meUid, dict, onProfile, onIntro, onSelect, initialSel, demo, wheelZoom } = opts;
   const { IND, FN, HELP } = dict;
   const d3 = window.d3;
   if (!d3) { root.innerHTML = '<p class="hint">지도를 불러오지 못했습니다. 페이지를 새로고침해 주세요.</p>'; return { destroy() {} }; }
@@ -99,8 +99,10 @@ export function mountNetwork(root, opts) {
     sim.force('link', null).force('charge', null).force('x', null).force('y', null)
       .force('col', d3.forceCollide(d => d.r + 3.2).strength(.9));
     if (S.mode === 'net') {
-      sim.force('link', d3.forceLink(links).distance(40).strength(.24))
-        .force('charge', d3.forceManyBody().strength(-30).distanceMax(240))
+      // 넓은 화면일수록 사람 사이를 벌려 지도가 화면을 채우게 함
+      const n = Math.max(1, people.length), k = Math.max(1, Math.min(3, Math.sqrt(aw * ah / n) / 54, .75 * Math.min(aw, ah) / (36 * Math.sqrt(n))));
+      sim.force('link', d3.forceLink(links).distance(40 * k).strength(.24))
+        .force('charge', d3.forceManyBody().strength(-30 * k).distanceMax(240 * k))
         .force('x', d3.forceX(cx).strength(.05))
         .force('y', d3.forceY(cy).strength(.05 * Math.max(1, aw / ah)));
     } else if (S.mode === 'cohort') {
@@ -133,7 +135,8 @@ export function mountNetwork(root, opts) {
     wide = window.matchMedia('(min-width: 980px)').matches;
     const top = q('.nv-top').getBoundingClientRect().bottom - r.top + 10;
     const bot = r.bottom - q('.nv-bot').getBoundingClientRect().top + 8;
-    AREA = { x0: 14, x1: wide ? W - 362 : W - 14, y0: Math.max(70, top), y1: H - Math.max(60, bot) };
+    const L = parseFloat(getComputedStyle(viz).getPropertyValue('--nv-inset-l')) || 0; // 왼쪽을 가리는 글(첫 화면)이 있으면 그만큼 비움
+    AREA = { x0: 14 + L, x1: wide ? W - 362 : W - 14, y0: Math.max(70, top), y1: H - Math.max(60, bot) };
     makeBg();
     return true;
   }
@@ -158,7 +161,7 @@ export function mountNetwork(root, opts) {
 
   /* ---------- 확대 ---------- */
   const zoom = d3.zoom().scaleExtent([.6, 5]).clickDistance(5)
-    .filter(ev => ev.type === 'wheel' ? (ev.ctrlKey || ev.metaKey) : ev.type.startsWith('touch') ? ev.touches.length > 1 : !ev.button)
+    .filter(ev => ev.type === 'wheel' ? (ev.ctrlKey || ev.metaKey || (wheelZoom && wide)) : ev.type.startsWith('touch') ? ev.touches.length > 1 : !ev.button)
     .on('zoom', ev => { T = ev.transform; tip.hidden = true; });
   d3.select(cv).call(zoom).on('dblclick.zoom', null);
   cv.style.touchAction = 'pan-x pan-y';
@@ -344,9 +347,10 @@ export function mountNetwork(root, opts) {
     if (!p) {
       const nc = {}; people.forEach(o => o.need.forEach(h => { nc[h] = (nc[h] || 0) + 1; }));
       const top = Object.entries(nc).sort((a, b) => b[1] - a[1]).slice(0, 4), mx = top.length ? top[0][1] : 1;
-      panel.innerHTML = `<p class="nv-k">ALUMNI NETWORK</p>
+      panel.innerHTML = `<p class="nv-k">${demo ? 'EXAMPLE NETWORK' : 'ALUMNI NETWORK'}</p>
         <h2>${people.length}명,<br>추천 매칭 ${REC.length}쌍</h2>
-        <p class="nv-d">점을 누르면 그 사람을 중심으로 보여줍니다. 넓게 보려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.</p>
+        <p class="nv-d">점 하나가 한 사람이고, 선은 한쪽이 필요한 것을 다른 쪽이 줄 수 있는 두 사람이에요. 빛이 흐르는 방향으로 도움이 갑니다.</p>
+        <p class="nv-d">점을 누르면 그 사람을 중심으로 보여 줍니다. ${wheelZoom && window.matchMedia('(min-width: 980px)').matches ? '스크롤하면 확대·축소돼요.' : '확대하려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.'}</p>
         ${me ? `<section class="nv-sec"><h3>나를 도울 수 있는 사람<b>${me.helpers.length}명</b></h3>
           ${me.helpers.slice(0, 3).map(o => row(o, H_(inter(o.offer, me.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다. 사람이 늘거나 ‘필요한 것’을 바꾸면 생깁니다.</span>'}
           <div class="nv-actions"><button class="nv-btn" data-nact="center-me">나를 중심으로 보기</button>${demo ? '' : '<a class="nv-btn" href="#/match">시너지 추천 보기</a>'}</div></section>` : ''}

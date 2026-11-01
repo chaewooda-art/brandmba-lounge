@@ -105,23 +105,31 @@ V.setup = () => `<div class="wrap narrow"><section class="card pend">
 </section></div>`;
 
 V.login = () => {
+  const me = demoMe();
+  return `<section class="hero" aria-labelledby="lt">
+  <div class="hero-copy">
+    <div class="hero-mark">${seal(52)}<p class="eyebrow">KYUNG HEE BRAND MBA · SINCE 1998</p></div>
+    <h1 id="lt">경희 브랜드MBA<br> 라운지</h1>
+    <p class="lead">브랜드를 만드는 동문과 학술회 참가자가 서로를 찾는 곳입니다. 신청서를 내고 운영진이 등록한 분만 들어올 수 있어요.</p>
+    <div class="hero-cta">
+      ${ENABLE_GOOGLE ? '<button class="btn btn-primary" type="button" data-act="google">신청한 구글 계정으로 로그인</button>' : ''}
+      <button class="btn ${ENABLE_GOOGLE ? 'btn-glass' : 'btn-primary'}" type="button" data-act="email-login">이메일로 로그인</button>
+      ${FORM_URL ? `<p class="hero-apply">아직 신청 전이라면 ${formLink('linkish')}</p>` : ''}
+    </div>
+    <div class="hero-pick">
+      <p><span class="badge">예시</span> 가상 인물 ${DEMO_MEMBERS.length}명으로 만든 지도예요. 누구의 시점으로 볼까요?</p>
+      <div class="filters" role="group" aria-label="예시 인물 고르기">${DEMO_PERSONAS.map(p => `<button class="pick" data-act="demo-me" data-id="${p.uid}" aria-pressed="${p.uid === me.uid}">${esc(p.label)}</button>`).join('')}</div>
+    </div>
+    <button class="linklike hero-down" type="button" data-act="to-preview">라운지에서 받는 추천 미리 보기 ↓</button>
+  </div>
+  <div id="sc-net" class="hero-map"></div>
+</section>
+<section class="showcase" id="preview" aria-labelledby="pv"><div class="wrap wide" id="showcase">${showcaseHTML()}</div></section>`;
+};
+function loginBoxHTML() {
   const t = S.loginTab;
-  return `<div class="wrap login">
-  <section class="login-intro" aria-labelledby="lt">
-    ${seal(84)}
-    <p class="eyebrow">KYUNG HEE BRAND MBA · SINCE 1998</p>
-    <h1 id="lt">경희 브랜드MBA<br>라운지</h1>
-    <p class="lead">브랜드를 만드는 동문과 학술회 참가자가 서로를 찾는 곳입니다. 신청서를 내고 운영진이 등록한 분만 들어올 수 있습니다.</p>
-    <ol class="flow">
-      <li><b>신청서 제출</b><span>구글 계정으로 로그인해 작성</span></li>
-      <li><b>운영진 등록</b><span>신청 내용 확인</span></li>
-      <li><b>로그인</b><span>신청한 구글 계정으로</span></li>
-      <li><b>라운지 이용</b><span>지도, 시너지 추천, 명부</span></li>
-    </ol>
-    ${FORM_URL ? `<p class="hint">아직 신청서를 내지 않으셨나요? ${formLink('linkish')}</p>` : ''}
-    <button class="linklike to-preview" type="button" data-act="to-preview">라운지 미리 보기 ↓</button>
-  </section>
-  <section class="login-box card" aria-label="로그인">
+  return `<section class="login-box" aria-labelledby="lb-h">
+    <h2 id="lb-h">라운지 로그인</h2>
     ${ENABLE_GOOGLE ? `<div class="stack g-first">
       <button class="btn btn-primary btn-block" type="button" data-act="google">신청한 구글 계정으로 로그인</button>
       <p class="mini">신청서를 낸 구글 계정을 고르면 바로 들어갑니다.</p>
@@ -146,10 +154,8 @@ V.login = () => {
       <button class="btn ${ENABLE_GOOGLE ? 'btn-ghost' : 'btn-primary'} btn-block" type="submit">비밀번호 만들고 인증 메일 받기</button>
     </form>`}
     <p class="mini"><a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></p>
-  </section>
-</div>
-<section class="showcase" id="preview" aria-labelledby="pv"><div class="wrap wide" id="showcase">${showcaseHTML()}</div></section>`;
-};
+  </section>`;
+}
 
 /* ---------- 로그인 전 미리 보기 (가상 인물) ---------- */
 const demoMe = () => DEMO_MEMBERS.find(u => u.uid === S.demoMe) || DEMO_MEMBERS[0];
@@ -164,13 +170,9 @@ function showcaseHTML() {
   return `<header class="sc-head">
     <p class="eyebrow-k">라운지 미리 보기 <span class="badge">예시</span></p>
     <h2 id="pv">들어오면 이런 연결이 보여요</h2>
-    <p class="sub">가상의 인물 ${DEMO_MEMBERS.length}명으로 만든 예시입니다. 이름은 가렸고 회사 이름도 지어낸 것이에요. 실제 라운지에서는 명부에 오른 동문과 학술회 참가자끼리만 서로를 봅니다.</p>
-    <div class="sc-pick"><span class="mini">누구의 시점으로 볼까요</span>
-      <div class="filters" role="group" aria-label="예시 인물 고르기">${DEMO_PERSONAS.map(p => `<button class="pick" data-act="demo-me" data-id="${p.uid}" aria-pressed="${p.uid === me.uid}">${esc(p.label)}</button>`).join('')}</div>
-    </div>
+    <p class="sub">위 지도와 같은 가상의 인물 ${DEMO_MEMBERS.length}명으로 만든 예시입니다. 이름은 가렸고 회사 이름도 지어낸 것이에요. 실제 라운지에서는 명부에 오른 동문과 학술회 참가자끼리만 서로를 봅니다.</p>
     <p class="sc-me"><b>나</b> ${who(me)} · 필요한 것 ${esc(needLabels(me).join(', '))}</p>
   </header>
-  <div id="sc-net" class="sc-net"></div>
   <div class="sc-grid">
     <section class="card msec-card" aria-labelledby="sc1"><h3 id="sc1" class="sc-h">시너지 추천</h3>
       <p class="hint">필요한 것과 줄 수 있는 것, 거쳐 온 회사, 업종·직무를 맞춰 이유와 함께 추천해요.</p>
@@ -186,7 +188,16 @@ function showcaseHTML() {
       <div class="co-list">${groups.map(g => `<div class="co-row${g.people.some(p => p.uid === me.uid) ? ' mine' : ''}"><b>${esc(g.name)}</b><span class="muted">${g.people.length}명</span><div class="pchips">${g.people.slice(0, 8).map(p => p.uid === me.uid ? '<span class="pchip me">나</span>' : chip(p)).join('')}</div></div>`).join('')}</div>
     </section>
   </div>
-  <div class="sc-cta"><p>내 정보로 이런 연결을 받아 보려면 신청서를 내 주세요. 운영진이 확인하면 바로 들어올 수 있어요.</p>${formLink('btn btn-primary')}</div>`;
+  <section class="sc-cta" aria-labelledby="sc4">
+    <div class="sc-cta-t"><h3 id="sc4" class="sc-h">라운지에 들어오는 방법</h3><p class="hint">내 정보로 이런 연결을 받아 보려면 신청서를 내 주세요. 운영진이 확인하면 바로 들어올 수 있어요.</p></div>
+    <ol class="flow">
+      <li><b>신청서 제출</b><span>구글 계정으로 로그인해 작성</span></li>
+      <li><b>운영진 등록</b><span>신청 내용 확인</span></li>
+      <li><b>로그인</b><span>신청한 구글 계정으로</span></li>
+      <li><b>라운지 이용</b><span>지도, 시너지 추천, 명부</span></li>
+    </ol>
+    ${formLink('btn btn-primary')}
+  </section>`;
 }
 function mountShowcase() {
   destroyNet();
@@ -313,13 +324,7 @@ V.form = () => {
 </div>`;
 };
 
-V.net = () => `<div class="wrap wide">
-  <header class="page-head split">
-    <div><p class="eyebrow-k">네트워크 지도</p><h1>나와 이어지는 동문</h1></div>
-    <p class="sub">점 하나가 동문 한 명입니다. 선은 한쪽이 필요한 것을 다른 쪽이 줄 수 있는 두 사람이고, 빛이 흐르는 방향이 도움이 가는 방향이에요.</p>
-  </header>
-  <div id="net-root"></div>
-</div>`;
+V.net = () => `<h1 class="sr-only">네트워크 지도</h1><div id="net-root" class="nv-full"></div>`;
 
 V.dir = () => {
   const f = S.filter;
@@ -810,6 +815,8 @@ function openWithdraw() {
 const NAV = [['net', '네트워크 지도'], ['match', '시너지 추천'], ['dir', '명부'], ['intros', '소개 요청'], ['me', '내 프로필']];
 const APPROVED_VIEWS = ['net', 'match', 'dir', 'intros', 'me', 'admin'];
 const approved = () => !!(S.member && S.member.status === 'approved');
+// 상단 바 높이를 CSS 변수로 둬서 지도가 남은 화면을 꽉 채우게 합니다
+new ResizeObserver(() => document.documentElement.style.setProperty('--bar-h', ($('#bar').hidden ? 0 : $('#bar').offsetHeight) + 'px')).observe($('#bar'));
 function renderBar() {
   const bar = $('#bar');
   if (!S.user || ['login', 'setup', 'boot'].includes(S.view)) { bar.hidden = true; bar.innerHTML = ''; return; }
@@ -835,6 +842,8 @@ async function show(v) {
   if (v === 'admin' && !S.admin) v = approved() ? 'net' : outsideView();
   destroyNet();
   S.view = v;
+  document.body.dataset.view = v;
+  if (v !== 'login' && document.querySelector('#modal .login-box')) closeModal();
   renderBar();
   if (v === 'admin' || v === 'intros') {
     $('#app').innerHTML = V.boot();
@@ -854,7 +863,7 @@ async function show(v) {
   if (v === 'login') mountShowcase();
   if (v === 'net') {
     S.net = mountNetwork($('#net-root'), {
-      members: S.members, meUid: S.mid, dict: { IND, FN, HELP }, initialSel: S.netSel,
+      members: S.members, meUid: S.mid, dict: { IND, FN, HELP }, initialSel: S.netSel, wheelZoom: true,
       onProfile: openProfile, onIntro: openIntro, onSelect: id => { S.netSel = id; }
     });
   }
@@ -1031,15 +1040,22 @@ document.addEventListener('click', async e => {
       case 'tab': {
         S.loginTab = b.dataset.tab;
         const box = document.querySelector('.login-box');
-        if (box) { const tmp = document.createElement('div'); tmp.innerHTML = V.login(); box.replaceWith(tmp.querySelector('.login-box')); }
-        else show('login');
+        if (box) { const tmp = document.createElement('div'); tmp.innerHTML = loginBoxHTML(); box.replaceWith(tmp.querySelector('.login-box')); const f = document.querySelector('.login-box input'); if (f) f.focus(); }
+        else openModal(loginBoxHTML());
         break;
       }
       case 'to-preview': { const el = document.getElementById('preview'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); break; }
       case 'demo-me': {
         S.demoMe = b.dataset.id;
+        document.querySelectorAll('[data-act="demo-me"]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.id === S.demoMe)));
         const box = document.getElementById('showcase');
-        if (box) { box.innerHTML = showcaseHTML(); mountShowcase(); }
+        if (box) box.innerHTML = showcaseHTML();
+        mountShowcase();
+        break;
+      }
+      case 'email-login': {
+        openModal(loginBoxHTML());
+        const f = $('#li-email') || $('#ac-email'); if (f) f.focus();
         break;
       }
       case 'demo-profile': openDemoProfile(id); break;

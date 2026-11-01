@@ -3,10 +3,10 @@
    네트워크 지도만 어두운 밤하늘 무대로 둡니다(두 테마 모두 같은 무대). */
 :root{
   --paper:#f5f3f4; --surface:#ffffff; --sunk:#eeeaec; --ink:#1d191b; --muted:#6b6267; --line:#e2dcdf;
-  --crimson:#9b1c33; --crimson-ink:#ffffff; --crimson-soft:#f6e7ea;
+  --crimson:#a40f16; --crimson-ink:#ffffff; --crimson-soft:#f8e5e6; --gold:#c0a354;
   --ok:#1f7a4d; --ok-soft:#e2f1e8; --warn:#9a5c00; --warn-soft:#fbefd9; --danger:#b42318;
   --st-bg:#0b0a13; --st-ink:#eeeaf6; --st-muted:#9c97ad; --st-line:rgba(238,234,246,.12); --st-glass:rgba(19,17,31,.74);
-  --st-amber:#c98500; --st-crimson:#ff4f6e; --st-gold:#e2bd6e;
+  --st-amber:#c98500; --st-crimson:#ff4f6e; --st-gold:#d4b665;
   --display:'Hahmlet','Noto Serif KR','AppleMyungjo',serif;
   --body:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
@@ -15,7 +15,7 @@
 @media (prefers-color-scheme: dark){
   :root{
     --paper:#141113; --surface:#1d191b; --sunk:#272225; --ink:#f2edef; --muted:#a69ca1; --line:#342e31;
-    --crimson:#e5637a; --crimson-ink:#1b0b10; --crimson-soft:#3b1d25;
+    --crimson:#ee6b6e; --crimson-ink:#1b0b0c; --crimson-soft:#3b1c1e;
     --ok:#5cc48f; --ok-soft:#163024; --warn:#e5a845; --warn-soft:#33260f; --danger:#f97066;
     color-scheme:dark;
   }
@@ -56,6 +56,8 @@ main{padding-block:28px 80px;min-height:60vh}
 .bar{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;padding-top:env(safe-area-inset-top,0px)}
 .bar-in{display:flex;align-items:center;gap:10px 24px;padding-block:10px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.seal{display:block;flex:none;border-radius:50%}
+.mcard .seal{box-shadow:0 0 0 2px #fff}
 .brand b{display:block;font-family:var(--display);font-size:1.05rem;line-height:1.2}
 .brand small{display:block;font-size:.72rem;color:var(--muted)}
 .nav{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto}

@@ -5,7 +5,7 @@
 import { offersOf, needsOf, fnsOf, fnTokens, fnText, helpLabel, cohortLabel, cohortNum } from './model.js';
 
 const FONT = "'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif";
-const ST = { bg: '#0b0a13', ink: '#eeeaf6', muted: '#9c97ad', spark: '#fff6f8', mint: '#4fd8b8', gold: '#e2bd6e', halo: 'rgba(11,10,19,.9)' };
+const ST = { bg: '#0b0a13', ink: '#eeeaf6', muted: '#9c97ad', spark: '#fff6f8', mint: '#4fd8b8', gold: '#d4b665', halo: 'rgba(11,10,19,.9)' };
 // 점 색: 졸업생 빨강, 재학생 파랑, 학술회 참가자 보라 (선은 두 사람 색을 이어 그라데이션)
 const TC = { grad: '255,79,110', student: '58,150,255', conf: '170,104,255' };
 const rgb = (c, a) => `rgba(${c},${a == null ? 1 : a})`;

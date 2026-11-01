@@ -35,11 +35,9 @@ const S = {
 };
 
 /* ---------- 공통 조각 ---------- */
-let sealN = 0;
-function seal(size, inv) {
-  const id = 'seal' + (++sealN);
-  const bg = inv ? 'var(--crimson-ink)' : 'var(--crimson)', fg = inv ? 'var(--crimson)' : 'var(--crimson-ink)';
-  return `<svg class="seal" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><defs><path id="${id}" d="M50,50 m-35,0 a35,35 0 1,1 70,0 a35,35 0 1,1 -70,0"/></defs><circle cx="50" cy="50" r="48" style="fill:${bg}"/><circle cx="50" cy="50" r="43.5" style="fill:none;stroke:${fg};stroke-width:.8;opacity:.6"/><circle cx="50" cy="50" r="26" style="fill:none;stroke:${fg};stroke-width:.8;opacity:.6"/><text style="fill:${fg};font-family:var(--mono);font-size:7.4px;letter-spacing:1.3px"><textPath href="#${id}">KYUNG HEE · BRAND MBA · EST. 1998 ·</textPath></text><text x="50" y="58.5" text-anchor="middle" style="fill:${fg};font-family:var(--display);font-size:23px;font-weight:700">BM</text></svg>`;
+// 전공 앰블럼(이미지). 옆에 이름 글자가 함께 있어 화면 읽기 도구에는 숨깁니다.
+function seal(size) {
+  return `<img class="seal" src="img/emblem-256.webp" width="${size}" height="${size}" alt="" decoding="async">`;
 }
 
 let toastTimer;
@@ -466,7 +464,7 @@ V.me = () => {
   <header class="page-head"><p class="eyebrow-k">내 프로필</p><h1>${esc(u.name)}</h1></header>
   <div class="me-grid">
     <div class="mcard" role="img" aria-label="${esc(u.name)} 라운지 카드, ${esc(cohortLabel(u))}, ${esc(IND[u.industry] || '')}, 회원번호 ${no}">
-      <div class="mc-top">${seal(52, true)}<p class="mc-eyebrow">${card}</p></div>
+      <div class="mc-top">${seal(52)}<p class="mc-eyebrow">${card}</p></div>
       <div><p class="mc-name">${esc(u.name)}</p><p class="mc-meta">${esc(cohortLabel(u))} · ${esc(IND[u.industry] || '')}</p><p class="mc-no">${no}</p></div>
     </div>
     <section class="card me-body" aria-label="프로필 정보">

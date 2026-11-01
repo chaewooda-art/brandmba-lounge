@@ -5,7 +5,10 @@
 import { offersOf, needsOf, fnsOf, fnTokens, fnText, helpLabel, cohortLabel, cohortNum } from './model.js';
 
 const FONT = "'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif";
-const ST = { bg: '#110c0f', ink: '#f1e9e4', node: '#d6c9c4', me: '#f7efea', muted: '#a3949a', amber: '#c98500', spark: '#ffd88f', azure: '#4a8ce6', crimson: '#ff5d79', gold: '#d9b46a', halo: 'rgba(17,12,15,.9)' };
+const ST = { bg: '#0b0a13', ink: '#eeeaf6', muted: '#9c97ad', spark: '#fff6f8', mint: '#4fd8b8', gold: '#e2bd6e', halo: 'rgba(11,10,19,.9)' };
+// 점 색: 졸업생 빨강, 재학생 파랑, 학술회 참가자 보라 (선은 두 사람 색을 이어 그라데이션)
+const TC = { grad: '255,79,110', student: '58,150,255', conf: '170,104,255' };
+const rgb = (c, a) => `rgba(${c},${a == null ? 1 : a})`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const inter = (a, b) => (a || []).filter(x => (b || []).includes(x));
 const CONF = 'conf';
@@ -49,7 +52,7 @@ export function mountNetwork(root, opts) {
   const RECDIR = REC.flatMap(e => e.bi ? [{ a: e.a, b: e.b, rev: false }, { a: e.a, b: e.b, rev: true }] : [{ a: e.a, b: e.b, rev: false }]);
   people.forEach(p => { p.deg = 0; p.recN = new Set(); });
   REC.forEach(e => { e.a.deg++; e.b.deg++; e.a.recN.add(e.b); e.b.recN.add(e.a); });
-  people.forEach(p => { p.r = 3.4 + Math.sqrt(p.deg) * 1.3 + (p.me ? 1.2 : 0); p.ph = hash01(p.uid) * Math.PI * 2; });
+  people.forEach(p => { p.c = TC[p.type] || TC.grad; p.r = Math.min(18, 2.6 + Math.pow(p.deg, 1.25) * .75) + (p.me ? 1 : 0); p.ph = hash01(p.uid) * Math.PI * 2; });
   const HUBS = people.filter(p => p.deg > 0).sort((a, b) => b.deg - a.deg).slice(0, 8);
   const links = REC.map(e => ({ source: e.a, target: e.b }));
   const R = rng(7), order = people.slice();
@@ -83,7 +86,7 @@ export function mountNetwork(root, opts) {
   const q = s => root.querySelector(s);
   const viz = q('.nv-viz'), cv = q('.nv-cv'), ctx = cv.getContext('2d'), tip = q('.nv-tip'), panel = q('.nv-panel');
   const bgc = document.createElement('canvas');
-  const GLOW = { ivory: sprite('247,239,234'), crimson: sprite('255,80,112'), amber: sprite('255,196,110') };
+  const GLOW = { spark: sprite('255,236,242') }; Object.values(TC).forEach(c => { GLOW[c] = sprite(c); });
 
   /* ---------- 상태 ---------- */
   const S = { mode: 'net', show: { m: true, fn: true, industry: false, cohort: false }, sel: null, hover: null };
@@ -101,8 +104,9 @@ export function mountNetwork(root, opts) {
     if (S.mode === 'net') {
       // 넓은 화면일수록 사람 사이를 벌려 지도가 화면을 채우게 함
       const n = Math.max(1, people.length), k = Math.max(1, Math.min(3, Math.sqrt(aw * ah / n) / 48, .8 * Math.min(aw, ah) / (30 * Math.sqrt(n))));
-      sim.force('link', d3.forceLink(links).distance(40 * k).strength(.24))
-        .force('charge', d3.forceManyBody().strength(-30 * k).distanceMax(240 * k))
+      // 연결이 적은 사람은 허브 가까이(별 모양), 허브끼리는 서로 밀어 무리가 갈라지게
+      sim.force('link', d3.forceLink(links).distance(l => 40 * k * (Math.min(l.source.deg, l.target.deg) <= 1 ? .7 : 1.2)).strength(.3))
+        .force('charge', d3.forceManyBody().strength(d => -26 * k * (1 + d.deg * .3)).distanceMax(260 * k))
         .force('x', d3.forceX(cx).strength(.05))
         .force('y', d3.forceY(cy).strength(.05 * Math.max(1, aw / ah)));
     } else if (S.mode === 'cohort') {
@@ -143,18 +147,29 @@ export function mountNetwork(root, opts) {
     bgc.width = Math.max(1, Math.round(W * DPR)); bgc.height = Math.max(1, Math.round(H * DPR));
     const g = bgc.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0);
     g.fillStyle = ST.bg; g.fillRect(0, 0, W, H);
-    const cx = (AREA.x0 + AREA.x1) / 2, cy = (AREA.y0 + AREA.y1) / 2;
-    let gr = g.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * .62);
-    gr.addColorStop(0, 'rgba(150,26,58,.32)'); gr.addColorStop(.5, 'rgba(92,16,40,.12)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    gr = g.createRadialGradient(W * .12, H * .1, 0, W * .12, H * .1, Math.max(W, H) * .45);
-    gr.addColorStop(0, 'rgba(217,180,106,.07)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    const r = rng(11); g.fillStyle = '#f7efea';
-    for (let i = 0; i < 240; i++) { g.globalAlpha = .03 + r() * .1; g.beginPath(); g.arc(r() * W, r() * H, .35 + r() * .85, 0, 7); g.fill(); }
+    const cx = (AREA.x0 + AREA.x1) / 2, cy = (AREA.y0 + AREA.y1) / 2, M = Math.max(W, H);
+    const glow = (x, y, rad, c, a) => { const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, rgb(c, a)); gr.addColorStop(1, rgb(c, 0)); g.fillStyle = gr; g.fillRect(0, 0, W, H); };
+    glow(cx - (AREA.x1 - AREA.x0) * .22, cy + (AREA.y1 - AREA.y0) * .1, M * .42, TC.student, .10);
+    glow(cx + (AREA.x1 - AREA.x0) * .2, cy - (AREA.y1 - AREA.y0) * .15, M * .4, TC.grad, .09);
+    glow(cx, cy, M * .3, TC.conf, .06);
+    // 장식용 흐릿한 연결망과 큰 호(실제 데이터 아님)
+    const r = rng(11), pts = [];
+    for (let i = 0; i < 150; i++) pts.push([r() * W, r() * H, r()]);
+    g.strokeStyle = '#d8d4ea'; g.lineWidth = .6;
+    for (let i = 0; i < pts.length; i++) {
+      const [x, y] = pts[i]; let n = 0;
+      for (let j = i + 1; j < pts.length && n < 2; j++) {
+        const [x2, y2] = pts[j], d = Math.hypot(x2 - x, y2 - y);
+        if (d < 160) { n++; g.globalAlpha = .07 + (1 - d / 160) * .08; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo((x + x2) / 2 - (y2 - y) * .25, (y + y2) / 2 + (x2 - x) * .25, x2, y2); g.stroke(); }
+      }
+    }
+    g.fillStyle = '#d8d4ea';
+    for (const [x, y, z] of pts) { g.globalAlpha = .16 + z * .2; g.beginPath(); g.arc(x, y, .8 + z * 1.4, 0, 7); g.fill(); }
+    g.lineWidth = .7;
+    for (let i = 0; i < 8; i++) { g.globalAlpha = .05 + r() * .04; g.beginPath(); g.arc(r() * W, r() * H, M * (.25 + r() * .5), r() * 7, r() * 7 + 1.4 + r() * 2); g.stroke(); }
     g.globalAlpha = 1;
-    gr = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .32, W / 2, H / 2, Math.max(W, H) * .78);
-    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.5)');
+    const gr = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .35, W / 2, H / 2, M * .8);
+    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.45)');
     g.fillStyle = gr; g.fillRect(0, 0, W, H);
   }
 
@@ -200,6 +215,17 @@ export function mountNetwork(root, opts) {
     for (const pr of pairs) { const a = pr[0], b = pr[1], c = ctrl(a, b); ctx.moveTo(a.dx, a.dy); ctx.quadraticCurveTo(c[0], c[1], b.dx, b.dy); }
     ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
   }
+  // 두 사람 색을 잇는 그라데이션 곡선(비즈니스 매칭)
+  function strokeGrad(pairs, alpha, lw) {
+    if (!pairs.length || alpha <= 0) return;
+    ctx.lineWidth = lw; ctx.globalAlpha = alpha;
+    for (const pr of pairs) {
+      const a = pr[0], b = pr[1], c = ctrl(a, b), gr = ctx.createLinearGradient(a.dx, a.dy, b.dx, b.dy);
+      gr.addColorStop(0, rgb(a.c)); gr.addColorStop(1, rgb(b.c));
+      ctx.strokeStyle = gr; ctx.beginPath(); ctx.moveTo(a.dx, a.dy); ctx.quadraticCurveTo(c[0], c[1], b.dx, b.dy); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
   function spawn() {
     const src = S.sel ? STAR : RECDIR; if (!src.length) return null;
     const e = src[Math.floor(Math.random() * src.length)];
@@ -215,7 +241,7 @@ export function mountNetwork(root, opts) {
     for (const p of parts) {
       const a = p.a, b = p.b, c = ctrl(a, b), t = p.rev ? 1 - p.t : p.t, u = 1 - t;
       const x = u * u * a.dx + 2 * u * t * c[0] + t * t * b.dx, y = u * u * a.dy + 2 * u * t * c[1] + t * t * b.dy, f = Math.sin(Math.PI * p.t);
-      ctx.globalAlpha = .55 * f; ctx.drawImage(GLOW.amber, x - 8 / k, y - 8 / k, 16 / k, 16 / k);
+      ctx.globalAlpha = .5 * f; ctx.drawImage(GLOW.spark, x - 8 / k, y - 8 / k, 16 / k, 16 / k);
       ctx.globalAlpha = f; ctx.fillStyle = ST.spark; ctx.beginPath(); ctx.arc(x, y, 1.5 / k, 0, 7); ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -254,13 +280,13 @@ export function mountNetwork(root, opts) {
     }
     ctx.globalAlpha = 1;
 
-    if (S.show.m) strokeSet(recPairs, ST.amber, (sel ? .06 : .3) * eA, 1 / k);
-    if (!sel && hov && S.show.m) strokeSet(REC.filter(e => e.a === hov || e.b === hov).map(e => [e.a, e.b]), ST.amber, .95 * eA, 1.6 / k);
+    if (S.show.m) strokeGrad(recPairs, (sel ? .06 : hov ? .22 : .5) * eA, 1.1 / k);
+    if (!sel && hov && S.show.m) strokeGrad(REC.filter(e => e.a === hov || e.b === hov).map(e => [e.a, e.b]), .95 * eA, 1.8 / k);
     if (sel) {
       if (S.show.industry) strokeSet(PEERS.industry.map(o => [sel, o]), ST.ink, .22, 1 / k);
       if (S.show.cohort) strokeSet(PEERS.cohort.map(o => [sel, o]), ST.ink, .75, 1.4 / k, [1.2 / k, 4 / k]);
-      if (S.show.fn) strokeSet(PEERS.fn.map(o => [sel, o]), ST.azure, .75, 1.3 / k);
-      if (S.show.m) strokeSet(STAR.map(s => [s.a, s.b]), ST.amber, .9, 1.7 / k);
+      if (S.show.fn) strokeSet(PEERS.fn.map(o => [sel, o]), ST.mint, .7, 1.3 / k);
+      if (S.show.m) strokeGrad(STAR.map(s => [s.a, s.b]), .95, 1.9 / k);
     }
     if (S.show.m && !reduce && el > 1.7) { stepParticles(dt); drawParticles(k); }
 
@@ -270,17 +296,18 @@ export function mountNetwork(root, opts) {
       if (sel) a *= (p === sel || SELSET.has(p)) ? 1 : .15;
       else if (hov) a *= (p === hov || hov.recN.has(p)) ? 1 : .42;
       const r = p.r * (p === hov ? 1.3 : 1) * (.35 + .65 * p.ia);
-      if (!sel && p.deg >= 4) { ctx.globalAlpha = a * .32; ctx.drawImage(GLOW.ivory, p.dx - r * 3.6, p.dy - r * 3.6, r * 7.2, r * 7.2); }
-      ctx.globalAlpha = a; ctx.fillStyle = p.me ? ST.me : ST.node;
+      if (!sel && p.deg >= 3) { const gs = r * (p.deg >= 6 ? 6 : 4); ctx.globalAlpha = a * (p.deg >= 6 ? .55 : .35); ctx.drawImage(GLOW[p.c], p.dx - gs, p.dy - gs, gs * 2, gs * 2); }
+      ctx.globalAlpha = a; ctx.fillStyle = rgb(p.c);
       ctx.beginPath(); ctx.arc(p.dx, p.dy, r, 0, 7); ctx.fill();
       if (p.me) { ctx.strokeStyle = ST.gold; ctx.lineWidth = 1.5 / k; ctx.beginPath(); ctx.arc(p.dx, p.dy, r + 3, 0, 7); ctx.stroke(); }
       if (p === hov) { ctx.strokeStyle = ST.ink; ctx.lineWidth = 1.2 / k; ctx.globalAlpha = a * .7; ctx.beginPath(); ctx.arc(p.dx, p.dy, r + 4.5, 0, 7); ctx.stroke(); }
     }
     if (sel) {
       const r = sel.r * 1.35;
-      ctx.globalAlpha = .75; ctx.drawImage(GLOW.crimson, sel.dx - r * 6, sel.dy - r * 6, r * 12, r * 12);
-      if (!reduce) for (let i = 0; i < 2; i++) { const ph = (el * .62 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * .6; ctx.strokeStyle = ST.crimson; ctx.lineWidth = 1.3 / k; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r + 3 + ph * 26, 0, 7); ctx.stroke(); }
-      ctx.globalAlpha = 1; ctx.fillStyle = ST.crimson; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r, 0, 7); ctx.fill();
+      ctx.globalAlpha = .85; ctx.drawImage(GLOW[sel.c], sel.dx - r * 7, sel.dy - r * 7, r * 14, r * 14);
+      if (!reduce) for (let i = 0; i < 2; i++) { const ph = (el * .62 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * .55; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2 / k; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r + 3 + ph * 26, 0, 7); ctx.stroke(); }
+      ctx.globalAlpha = 1; ctx.fillStyle = rgb(sel.c); ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6 / k; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r + 1.5 / k, 0, 7); ctx.stroke();
       if (sel.me) { ctx.strokeStyle = ST.gold; ctx.lineWidth = 1.5 / k; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r + 3, 0, 7); ctx.stroke(); }
     }
 
@@ -335,8 +362,8 @@ export function mountNetwork(root, opts) {
 
   /* ---------- 오른쪽 패널 ---------- */
   const swatch = t => {
-    const st = { m: `stroke:${ST.amber};stroke-width:2.4`, fn: `stroke:${ST.azure};stroke-width:2`, industry: `stroke:${ST.ink};stroke-width:1.4;opacity:.5`, cohort: `stroke:${ST.ink};stroke-width:2;stroke-dasharray:1.2 4` }[t];
-    return `<svg class="nv-sw" width="22" height="8" viewBox="0 0 22 8" aria-hidden="true"><line x1="2" y1="4" x2="20" y2="4" style="${st};stroke-linecap:round"/>${t === 'm' ? `<circle cx="13" cy="4" r="2.2" style="fill:${ST.spark}"/>` : ''}</svg>`;
+    const st = { m: 'stroke:url(#nv-mg);stroke-width:2.4', fn: `stroke:${ST.mint};stroke-width:2`, industry: `stroke:${ST.ink};stroke-width:1.4;opacity:.5`, cohort: `stroke:${ST.ink};stroke-width:2;stroke-dasharray:1.2 4` }[t];
+    return `<svg class="nv-sw" width="22" height="8" viewBox="0 0 22 8" aria-hidden="true">${t === 'm' ? `<defs><linearGradient id="nv-mg" gradientUnits="userSpaceOnUse" x1="2" y1="0" x2="20" y2="0"><stop offset="0" stop-color="${rgb(TC.grad)}"/><stop offset="1" stop-color="${rgb(TC.student)}"/></linearGradient></defs>` : ''}<line x1="2" y1="4" x2="20" y2="4" style="${st};stroke-linecap:round"/>${t === 'm' ? `<circle cx="13" cy="4" r="2.2" style="fill:${ST.spark}"/>` : ''}</svg>`;
   };
   const chips = (arr, c) => `<div class="nv-chips">${H_(arr).map(x => `<span class="nv-chip ${c}">${esc(x)}</span>`).join('')}</div>`;
   const row = (o, why) => `<button class="nv-row" data-nact="sel" data-uid="${o.uid}"><span class="nv-pn">${esc(o.name)}${o.me ? ' (나)' : ''}<i>${esc(o.lab)} · ${esc(o.org)}</i></span><span class="nv-pw">${esc(why)}</span></button>`;
@@ -387,7 +414,8 @@ export function mountNetwork(root, opts) {
   /* ---------- 범례·검색·보기 방식 ---------- */
   function renderLegend() {
     const items = [['m', '비즈니스 매칭'], ['fn', '같은 직무'], ['industry', '같은 업종'], ['cohort', '같은 기수']];
-    q('.nv-legend').innerHTML = items.map(([t, n]) => `<label><input type="checkbox" data-t="${t}" ${S.show[t] ? 'checked' : ''}>${swatch(t)}${n}</label>`).join('')
+    const dots = [['grad', '졸업생'], ['student', '재학생'], [CONF, '학술회 참가자']].filter(([t]) => people.some(p => p.type === t));
+    q('.nv-legend').innerHTML = `<span class="nv-types">${dots.map(([t, n]) => `<span><i class="nv-dot" style="background:${rgb(TC[t])};box-shadow:0 0 8px ${rgb(TC[t], .7)}"></i>${n}</span>`).join('')}</span>` + items.map(([t, n]) => `<label><input type="checkbox" data-t="${t}" ${S.show[t] ? 'checked' : ''}>${swatch(t)}${n}</label>`).join('')
       + `<label class="nv-me-l"><span class="nv-ring" aria-hidden="true"></span>나</label><span class="nv-lh">직무·업종·기수 선은 동문을 고르면 보입니다.</span>`;
   }
   q('.nv-legend').addEventListener('change', e => {

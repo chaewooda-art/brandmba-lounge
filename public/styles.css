@@ -56,8 +56,9 @@ main{padding-block:28px 80px;min-height:60vh}
 .bar{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;padding-top:env(safe-area-inset-top,0px)}
 .bar-in{display:flex;align-items:center;gap:10px 24px;padding-block:10px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
-.seal{display:block;flex:none;border-radius:50%}
-.mcard .seal{box-shadow:0 0 0 2px #fff}
+.seal{display:block;flex:none;background-color:var(--crimson);-webkit-mask:url(img/emblem-line.webp) center/contain no-repeat;mask:url(img/emblem-line.webp) center/contain no-repeat}
+.hero .seal,body[data-view="net"] .bar .seal{background-color:#fbfaf6}
+.mcard .seal{background-color:#fff}
 .brand b{display:block;font-family:var(--display);font-size:1.05rem;line-height:1.2}
 .brand small{display:block;font-size:.72rem;color:var(--muted)}
 .nav{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto}

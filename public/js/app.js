@@ -35,9 +35,10 @@ const S = {
 };
 
 /* ---------- 공통 조각 ---------- */
-// 전공 앰블럼(이미지). 옆에 이름 글자가 함께 있어 화면 읽기 도구에는 숨깁니다.
+// 전공 앰블럼(한 색 선 버전). 이미지 모양대로 잘라 색은 놓이는 자리에 맞춰 CSS로 칠합니다.
+// 옆에 이름 글자가 함께 있어 화면 읽기 도구에는 숨깁니다.
 function seal(size) {
-  return `<img class="seal" src="img/emblem-256.webp" width="${size}" height="${size}" alt="" decoding="async">`;
+  return `<span class="seal" style="width:${size}px;height:${size}px" aria-hidden="true"></span>`;
 }
 
 let toastTimer;

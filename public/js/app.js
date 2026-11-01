@@ -104,28 +104,31 @@ V.setup = () => `<div class="wrap narrow"><section class="card pend">
   <p class="sub"><code>public/js/config.js</code>에 Firebase 콘솔에서 복사한 설정값을 넣은 뒤 다시 배포해 주세요. 순서는 README.md에 있습니다.</p>
 </section></div>`;
 
-V.login = () => {
-  const me = demoMe();
-  return `<section class="hero" aria-labelledby="lt">
-  <div class="hero-copy">
-    <div class="hero-mark">${seal(52)}<p class="eyebrow">KYUNG HEE BRAND MBA · SINCE 1998</p></div>
-    <h1 id="lt">경희 브랜드MBA<br> 라운지</h1>
-    <p class="lead">브랜드를 만드는 동문과 학술회 참가자가 서로를 찾는 곳입니다. 신청서를 내고 운영진이 등록한 분만 들어올 수 있어요.</p>
+V.login = () => `<section class="hero" aria-labelledby="lt">
+  <header class="hero-top">
+    <div class="hero-brand">${seal(40)}<div><h1 id="lt">경희 브랜드MBA 라운지</h1><p class="eyebrow">KYUNG HEE BRAND MBA · SINCE 1998</p></div></div>
     <div class="hero-cta">
-      ${ENABLE_GOOGLE ? '<button class="btn btn-primary" type="button" data-act="google">신청한 구글 계정으로 로그인</button>' : ''}
-      <button class="btn ${ENABLE_GOOGLE ? 'btn-glass' : 'btn-primary'}" type="button" data-act="email-login">이메일로 로그인</button>
-      ${FORM_URL ? `<p class="hero-apply">아직 신청 전이라면 ${formLink('linkish')}</p>` : ''}
+      <button class="btn ${ENABLE_GOOGLE ? 'btn-glass' : 'btn-primary'} hide-s" type="button" data-act="email-login">이메일로 로그인</button>
+      ${ENABLE_GOOGLE ? '<button class="btn btn-primary hide-s" type="button" data-act="google">신청한 구글 계정으로 로그인</button>' : ''}
+      <button class="btn btn-primary show-s" type="button" data-act="email-login">로그인</button>
     </div>
-    <div class="hero-pick">
-      <p><span class="badge">예시</span> 가상 인물 ${DEMO_MEMBERS.length}명으로 만든 지도예요. 누구의 시점으로 볼까요?</p>
-      <div class="filters" role="group" aria-label="예시 인물 고르기">${DEMO_PERSONAS.map(p => `<button class="pick" data-act="demo-me" data-id="${p.uid}" aria-pressed="${p.uid === me.uid}">${esc(p.label)}</button>`).join('')}</div>
-    </div>
-    <button class="linklike hero-down" type="button" data-act="to-preview">라운지에서 받는 추천 미리 보기 ↓</button>
-  </div>
+  </header>
   <div id="sc-net" class="hero-map"></div>
 </section>
 <section class="showcase" id="preview" aria-labelledby="pv"><div class="wrap wide" id="showcase">${showcaseHTML()}</div></section>`;
-};
+// 첫 화면 지도의 오른쪽(휴대폰은 아래) 패널 맨 위에 들어가는 소개
+function heroIntroHTML() {
+  const me = demoMe();
+  return `<div class="nv-intro">
+    <p class="nv-k">BRAND MBA LOUNGE</p>
+    <h2 class="nv-hl">브랜드를 만드는 동문과 학술회 참가자가 서로를 찾는 곳</h2>
+    <p class="nv-d">신청서를 내고 운영진이 등록한 분만 들어올 수 있어요. 지금 보이는 지도는 가상 인물 ${DEMO_MEMBERS.length}명으로 만든 <b class="nv-ex">예시</b>입니다.</p>
+    <div class="nv-pick"><span>누구의 시점으로 볼까요</span>
+      <div class="filters" role="group" aria-label="예시 인물 고르기">${DEMO_PERSONAS.map(p => `<button class="pick" data-act="demo-me" data-id="${p.uid}" aria-pressed="${p.uid === me.uid}">${esc(p.label)}</button>`).join('')}</div>
+    </div>
+    <div class="nv-actions">${formLink('nv-btn primary')}<button class="nv-btn" type="button" data-act="to-preview">추천 미리 보기 ↓</button></div>
+  </div>`;
+}
 function loginBoxHTML() {
   const t = S.loginTab;
   return `<section class="login-box" aria-labelledby="lb-h">
@@ -153,6 +156,7 @@ function loginBoxHTML() {
       <p class="ferr" id="ac-err" role="alert"></p>
       <button class="btn ${ENABLE_GOOGLE ? 'btn-ghost' : 'btn-primary'} btn-block" type="submit">비밀번호 만들고 인증 메일 받기</button>
     </form>`}
+    ${FORM_URL ? `<p class="mini">아직 신청 전이라면 ${formLink('linkish')}</p>` : ''}
     <p class="mini"><a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></p>
   </section>`;
 }
@@ -170,7 +174,7 @@ function showcaseHTML() {
   return `<header class="sc-head">
     <p class="eyebrow-k">라운지 미리 보기 <span class="badge">예시</span></p>
     <h2 id="pv">들어오면 이런 연결이 보여요</h2>
-    <p class="sub">위 지도와 같은 가상의 인물 ${DEMO_MEMBERS.length}명으로 만든 예시입니다. 이름은 가렸고 회사 이름도 지어낸 것이에요. 실제 라운지에서는 명부에 오른 동문과 학술회 참가자끼리만 서로를 봅니다.</p>
+    <p class="sub">첫 화면 지도와 같은 가상의 인물 ${DEMO_MEMBERS.length}명으로 만든 예시입니다. 이름은 가렸고 회사 이름도 지어낸 것이에요. 실제 라운지에서는 명부에 오른 동문과 학술회 참가자끼리만 서로를 봅니다.</p>
     <p class="sc-me"><b>나</b> ${who(me)} · 필요한 것 ${esc(needLabels(me).join(', '))}</p>
   </header>
   <div class="sc-grid">
@@ -203,7 +207,7 @@ function mountShowcase() {
   destroyNet();
   const root = document.getElementById('sc-net'); if (!root) return;
   S.net = mountNetwork(root, {
-    members: DEMO_MEMBERS, meUid: S.demoMe, dict: { IND, FN, HELP }, demo: true,
+    members: DEMO_MEMBERS, meUid: S.demoMe, dict: { IND, FN, HELP }, demo: true, intro: heroIntroHTML(),
     onProfile: openDemoProfile, onIntro: () => toast('예시 화면입니다. 라운지에 들어오면 소개 요청을 보낼 수 있어요.'), onSelect: () => {}
   });
 }

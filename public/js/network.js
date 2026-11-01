@@ -21,7 +21,7 @@ function sprite(rgb) {
 }
 
 export function mountNetwork(root, opts) {
-  const { members, meUid, dict, onProfile, onIntro, onSelect, initialSel, demo, wheelZoom } = opts;
+  const { members, meUid, dict, onProfile, onIntro, onSelect, initialSel, demo, wheelZoom, intro } = opts;
   const { IND, FN, HELP } = dict;
   const d3 = window.d3;
   if (!d3) { root.innerHTML = '<p class="hint">지도를 불러오지 못했습니다. 페이지를 새로고침해 주세요.</p>'; return { destroy() {} }; }
@@ -100,7 +100,7 @@ export function mountNetwork(root, opts) {
       .force('col', d3.forceCollide(d => d.r + 3.2).strength(.9));
     if (S.mode === 'net') {
       // 넓은 화면일수록 사람 사이를 벌려 지도가 화면을 채우게 함
-      const n = Math.max(1, people.length), k = Math.max(1, Math.min(3, Math.sqrt(aw * ah / n) / 54, .75 * Math.min(aw, ah) / (36 * Math.sqrt(n))));
+      const n = Math.max(1, people.length), k = Math.max(1, Math.min(3, Math.sqrt(aw * ah / n) / 48, .8 * Math.min(aw, ah) / (30 * Math.sqrt(n))));
       sim.force('link', d3.forceLink(links).distance(40 * k).strength(.24))
         .force('charge', d3.forceManyBody().strength(-30 * k).distanceMax(240 * k))
         .force('x', d3.forceX(cx).strength(.05))
@@ -135,8 +135,7 @@ export function mountNetwork(root, opts) {
     wide = window.matchMedia('(min-width: 980px)').matches;
     const top = q('.nv-top').getBoundingClientRect().bottom - r.top + 10;
     const bot = r.bottom - q('.nv-bot').getBoundingClientRect().top + 8;
-    const L = parseFloat(getComputedStyle(viz).getPropertyValue('--nv-inset-l')) || 0; // 왼쪽을 가리는 글(첫 화면)이 있으면 그만큼 비움
-    AREA = { x0: 14 + L, x1: wide ? W - 362 : W - 14, y0: Math.max(70, top), y1: H - Math.max(60, bot) };
+    AREA = { x0: 14, x1: wide ? W - 362 : W - 14, y0: Math.max(70, top), y1: H - Math.max(60, bot) };
     makeBg();
     return true;
   }
@@ -347,7 +346,7 @@ export function mountNetwork(root, opts) {
     if (!p) {
       const nc = {}; people.forEach(o => o.need.forEach(h => { nc[h] = (nc[h] || 0) + 1; }));
       const top = Object.entries(nc).sort((a, b) => b[1] - a[1]).slice(0, 4), mx = top.length ? top[0][1] : 1;
-      panel.innerHTML = `<p class="nv-k">${demo ? 'EXAMPLE NETWORK' : 'ALUMNI NETWORK'}</p>
+      panel.innerHTML = `${intro || ''}<p class="nv-k">${demo ? 'EXAMPLE NETWORK' : 'ALUMNI NETWORK'}</p>
         <h2>${people.length}명,<br>추천 매칭 ${REC.length}쌍</h2>
         <p class="nv-d">점 하나가 한 사람이고, 선은 한쪽이 필요한 것을 다른 쪽이 줄 수 있는 두 사람이에요. 빛이 흐르는 방향으로 도움이 갑니다.</p>
         <p class="nv-d">점을 누르면 그 사람을 중심으로 보여 줍니다. ${wheelZoom && window.matchMedia('(min-width: 980px)').matches ? '스크롤하면 확대·축소돼요.' : '확대하려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.'}</p>

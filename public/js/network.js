@@ -30,6 +30,10 @@ export function mountNetwork(root, opts) {
   if (!d3) { root.innerHTML = '<p class="hint">지도를 불러오지 못했습니다. 페이지를 새로고침해 주세요.</p>'; return { destroy() {} }; }
   const ac = new AbortController(), on = { signal: ac.signal };
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const touchy = window.matchMedia('(pointer: coarse)').matches;
+  // 흐르는 빛·떠다니는 점. '동작 줄이기'를 켠 기기는 꺼진 채로 시작하고, 지도 오른쪽 아래 버튼으로 켜고 끌 수 있음
+  let motionOn = !reduce;
+  try { const m = localStorage.getItem('bm-motion'); if (m === 'on') motionOn = true; if (m === 'off') motionOn = false; } catch (e) { /* 저장소를 못 쓰면 기본값 */ }
   const H_ = arr => (arr || []).map(helpLabel);
 
   /* ---------- 데이터 ---------- */
@@ -76,15 +80,16 @@ export function mountNetwork(root, opts) {
       </div>
       <div class="nv-ov nv-bot">
         <div class="nv-legend nv-glass" role="group" aria-label="연결선 종류"></div>
-        <div class="nv-zoom nv-glass" role="group" aria-label="확대와 축소"><button data-nact="zin" aria-label="확대">+</button><button data-nact="zout" aria-label="축소">−</button><button data-nact="fit" aria-label="전체 보기">⤢</button></div>
+        <div class="nv-zoom nv-glass" role="group" aria-label="확대와 축소"><button data-nact="zin" aria-label="확대">+</button><button data-nact="zout" aria-label="축소">−</button><button data-nact="fit" aria-label="전체 보기">⤢</button><button data-nact="motion" class="nv-mo"></button></div>
       </div>
       <div class="nv-tip nv-glass" hidden></div>
+      <div class="nv-mini nv-glass" hidden></div>
       ${people.length < 3 ? `<div class="nv-empty nv-glass"><b>아직 등록된 사람이 ${people.length}명이에요</b><span>사람이 늘어날수록 이 지도에 연결이 생깁니다. 동문과 학술회 참가자에게 라운지를 알려 주세요.</span></div>` : ''}
     </div>
     <aside class="nv-panel nv-glass" aria-live="polite"></aside>
   </section>`;
   const q = s => root.querySelector(s);
-  const viz = q('.nv-viz'), cv = q('.nv-cv'), ctx = cv.getContext('2d'), tip = q('.nv-tip'), panel = q('.nv-panel');
+  const viz = q('.nv-viz'), cv = q('.nv-cv'), ctx = cv.getContext('2d'), tip = q('.nv-tip'), panel = q('.nv-panel'), mini = q('.nv-mini');
   const bgc = document.createElement('canvas');
   const GLOW = { spark: sprite('255,236,242') }; Object.values(TC).forEach(c => { GLOW[c] = sprite(c); });
 
@@ -175,10 +180,11 @@ export function mountNetwork(root, opts) {
 
   /* ---------- 확대 ---------- */
   const zoom = d3.zoom().scaleExtent([.6, 5]).clickDistance(5)
-    .filter(ev => ev.type === 'wheel' ? (ev.ctrlKey || ev.metaKey || (wheelZoom && wide)) : ev.type.startsWith('touch') ? ev.touches.length > 1 : !ev.button)
+    .filter(ev => ev.type === 'wheel' ? (ev.ctrlKey || ev.metaKey || (wheelZoom && wide)) : ev.type.startsWith('touch') ? true : !ev.button)
     .on('zoom', ev => { T = ev.transform; tip.hidden = true; });
   d3.select(cv).call(zoom).on('dblclick.zoom', null);
-  cv.style.touchAction = 'pan-x pan-y';
+  // 지도 위에서는 한 손가락으로 끌어 움직이고 두 손가락으로 확대(페이지 넘기기는 지도 밖·아래 패널에서)
+  cv.style.touchAction = 'none';
   const center = () => [(AREA.x0 + AREA.x1) / 2, (AREA.y0 + AREA.y1) / 2];
   function zoomTo(t, d) { d3.select(cv).transition().duration(reduce ? 0 : (d == null ? 850 : d)).ease(d3.easeCubicInOut).call(zoom.transform, t); }
   function focusOn(p) {
@@ -241,8 +247,8 @@ export function mountNetwork(root, opts) {
     for (const p of parts) {
       const a = p.a, b = p.b, c = ctrl(a, b), t = p.rev ? 1 - p.t : p.t, u = 1 - t;
       const x = u * u * a.dx + 2 * u * t * c[0] + t * t * b.dx, y = u * u * a.dy + 2 * u * t * c[1] + t * t * b.dy, f = Math.sin(Math.PI * p.t);
-      ctx.globalAlpha = .5 * f; ctx.drawImage(GLOW.spark, x - 8 / k, y - 8 / k, 16 / k, 16 / k);
-      ctx.globalAlpha = f; ctx.fillStyle = ST.spark; ctx.beginPath(); ctx.arc(x, y, 1.5 / k, 0, 7); ctx.fill();
+      ctx.globalAlpha = .6 * f; ctx.drawImage(GLOW.spark, x - 10 / k, y - 10 / k, 20 / k, 20 / k);
+      ctx.globalAlpha = f; ctx.fillStyle = ST.spark; ctx.beginPath(); ctx.arc(x, y, 1.8 / k, 0, 7); ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
@@ -255,7 +261,7 @@ export function mountNetwork(root, opts) {
     const k = T.k, sel = S.sel, hov = S.hover;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.drawImage(bgc, 0, 0, W, H);
     ctx.setTransform(DPR * k, 0, 0, DPR * k, DPR * T.x, DPR * T.y);
-    const wob = reduce ? 0 : 1.4;
+    const wob = motionOn ? 2.2 : 0;
     for (const p of people) {
       p.dx = p.x + Math.sin(el * .55 + p.ph) * wob; p.dy = p.y + Math.cos(el * .47 + p.ph * 1.7) * wob;
       p.ia = reduce ? 1 : ease(clamp((el - p.appear) / .6));
@@ -288,7 +294,7 @@ export function mountNetwork(root, opts) {
       if (S.show.fn) strokeSet(PEERS.fn.map(o => [sel, o]), ST.mint, .7, 1.3 / k);
       if (S.show.m) strokeGrad(STAR.map(s => [s.a, s.b]), .95, 1.9 / k);
     }
-    if (S.show.m && !reduce && el > 1.7) { stepParticles(dt); drawParticles(k); }
+    if (S.show.m && motionOn && el > (reduce ? 0 : 1.7)) { stepParticles(dt); drawParticles(k); }
 
     for (const p of people) {
       if (p.ia <= 0) continue;
@@ -305,7 +311,7 @@ export function mountNetwork(root, opts) {
     if (sel) {
       const r = sel.r * 1.35;
       ctx.globalAlpha = .85; ctx.drawImage(GLOW[sel.c], sel.dx - r * 7, sel.dy - r * 7, r * 14, r * 14);
-      if (!reduce) for (let i = 0; i < 2; i++) { const ph = (el * .62 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * .55; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2 / k; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r + 3 + ph * 26, 0, 7); ctx.stroke(); }
+      if (motionOn) for (let i = 0; i < 2; i++) { const ph = (el * .62 + i * .5) % 1; ctx.globalAlpha = (1 - ph) * .55; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2 / k; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r + 3 + ph * 26, 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1; ctx.fillStyle = rgb(sel.c); ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r, 0, 7); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6 / k; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r + 1.5 / k, 0, 7); ctx.stroke();
       if (sel.me) { ctx.strokeStyle = ST.gold; ctx.lineWidth = 1.5 / k; ctx.beginPath(); ctx.arc(sel.dx, sel.dy, r + 3, 0, 7); ctx.stroke(); }
@@ -338,9 +344,9 @@ export function mountNetwork(root, opts) {
   }
 
   /* ---------- 마우스 ---------- */
-  function hit(mx, my) {
+  function hit(mx, my, pad) {
     const x = (mx - T.x) / T.k, y = (my - T.y) / T.k; let best = null, bd = 1e9;
-    for (const p of people) { if (p.dx == null) continue; const d = Math.hypot(p.dx - x, p.dy - y); if (d < p.r + 9 / T.k && d < bd) { bd = d; best = p; } }
+    for (const p of people) { if (p.dx == null) continue; const d = Math.hypot(p.dx - x, p.dy - y); if (d < p.r + (pad || 9) / T.k && d < bd) { bd = d; best = p; } }
     return best;
   }
   function showTip(p) {
@@ -358,7 +364,18 @@ export function mountNetwork(root, opts) {
     if (p && p !== S.sel) showTip(p); else tip.hidden = true;
   }, on);
   cv.addEventListener('pointerleave', () => { S.hover = null; tip.hidden = true; }, on);
-  cv.addEventListener('click', ev => { const p = hit(ev.offsetX, ev.offsetY); if (p) select(p); else if (S.sel) clearSel(); }, on);
+  // 손가락 탭은 직접 알아봄(끌기 중 생기는 클릭과 헷갈리지 않게)
+  let tap = null, lastTap = 0;
+  cv.addEventListener('pointerdown', ev => { if (ev.pointerType !== 'mouse') tap = ev.isPrimary ? { x: ev.offsetX, y: ev.offsetY, t: performance.now(), id: ev.pointerId } : null; }, on);
+  cv.addEventListener('pointercancel', () => { tap = null; }, on);
+  cv.addEventListener('pointerup', ev => {
+    if (!tap || ev.pointerId !== tap.id) return;
+    const ok = Math.hypot(ev.offsetX - tap.x, ev.offsetY - tap.y) < 10 && performance.now() - tap.t < 600; tap = null;
+    if (!ok) return;
+    lastTap = performance.now();
+    const p = hit(ev.offsetX, ev.offsetY, 18); if (p) select(p); else if (S.sel) clearSel();
+  }, on);
+  cv.addEventListener('click', ev => { if (performance.now() - lastTap < 800) return; const p = hit(ev.offsetX, ev.offsetY); if (p) select(p); else if (S.sel) clearSel(); }, on);
 
   /* ---------- 오른쪽 패널 ---------- */
   const swatch = t => {
@@ -376,7 +393,7 @@ export function mountNetwork(root, opts) {
       panel.innerHTML = `${intro || ''}<p class="nv-k">${demo ? 'EXAMPLE NETWORK' : 'ALUMNI NETWORK'}</p>
         <h2>${people.length}명,<br>추천 매칭 ${REC.length}쌍</h2>
         <p class="nv-d">점 하나가 한 사람이고, 선은 한쪽이 필요한 것을 다른 쪽이 줄 수 있는 두 사람이에요. 빛이 흐르는 방향으로 도움이 갑니다.</p>
-        <p class="nv-d">점을 누르면 그 사람을 중심으로 보여 줍니다. ${wheelZoom && window.matchMedia('(min-width: 980px)').matches ? '스크롤하면 확대·축소돼요.' : '확대하려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.'}</p>
+        <p class="nv-d">점을 누르면 그 사람을 중심으로 보여 줍니다. ${touchy ? '한 손가락으로 끌어 옮기고, 두 손가락으로 벌려 확대하세요.' : wheelZoom && window.matchMedia('(min-width: 980px)').matches ? '스크롤하면 확대·축소돼요.' : '확대하려면 ⌘ 또는 Ctrl을 누른 채 스크롤하세요.'}</p>
         ${me ? `<section class="nv-sec"><h3>나를 도울 수 있는 사람<b>${me.helpers.length}명</b></h3>
           ${me.helpers.slice(0, 3).map(o => row(o, H_(inter(o.offer, me.need)).join(', '))).join('') || '<span class="nv-more">아직 없습니다. 사람이 늘거나 ‘필요한 것’을 바꾸면 생깁니다.</span>'}
           <div class="nv-actions"><button class="nv-btn" data-nact="center-me">나를 중심으로 보기</button>${demo ? '' : '<a class="nv-btn" href="#/match">시너지 추천 보기</a>'}</div></section>` : ''}
@@ -400,7 +417,23 @@ export function mountNetwork(root, opts) {
     }
     panel.classList.remove('swap'); void panel.offsetWidth; panel.classList.add('swap');
     if (!wide && p) panel.scrollTop = 0;
+    renderMini();
   }
+  // 휴대폰: 고른 사람을 지도 아래쪽 작은 카드로 바로 보여 줌(자세한 내용은 지도 아래 패널)
+  function renderMini() {
+    const p = S.sel, show = !!p && !wide;
+    mini.hidden = !show; viz.classList.toggle('has-mini', show);
+    if (!show) return;
+    const self = p.uid === meUid;
+    mini.innerHTML = `<div class="nv-mini-t"><b>${esc(p.name)}${self ? ' <span class="nv-me">나</span>' : ''}</b><span>${esc(p.lab)} · ${esc(p.org)}</span></div>
+      <div class="nv-actions"><button class="nv-btn" data-nact="more">자세히 보기 ↓</button>${self ? '' : `<button class="nv-btn primary" data-nact="intro" data-uid="${p.uid}">소개 요청</button>`}<button class="nv-btn" data-nact="clear">전체 보기</button></div>`;
+  }
+  mini.addEventListener('click', e => {
+    const b = e.target.closest('[data-nact]'); if (!b) return;
+    if (b.dataset.nact === 'more') panel.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    if (b.dataset.nact === 'clear') clearSel();
+    if (b.dataset.nact === 'intro' && onIntro) onIntro(b.dataset.uid);
+  }, on);
   panel.addEventListener('click', e => {
     const b = e.target.closest('[data-nact]'); if (!b) return;
     const a = b.dataset.nact, p = b.dataset.uid ? byUid.get(b.dataset.uid) : null;
@@ -435,6 +468,7 @@ export function mountNetwork(root, opts) {
     if (b.dataset.nact === 'zin') d3.select(cv).transition().duration(reduce ? 0 : 350).call(zoom.scaleBy, 1.4, c);
     if (b.dataset.nact === 'zout') d3.select(cv).transition().duration(reduce ? 0 : 350).call(zoom.scaleBy, 1 / 1.4, c);
     if (b.dataset.nact === 'fit') zoomTo(d3.zoomIdentity, 600);
+    if (b.dataset.nact === 'motion') { motionOn = !motionOn; parts = []; setMotionBtn(); try { localStorage.setItem('bm-motion', motionOn ? 'on' : 'off'); } catch (err) { /* 저장 못 해도 지금 화면엔 적용 */ } }
   }, on);
   const qi = q('#nv-q'), sugg = q('.nv-sugg');
   let results = [];
@@ -465,12 +499,16 @@ export function mountNetwork(root, opts) {
     const first = initialSel && byUid.get(initialSel);
     if (first) setTimeout(() => { if (alive) select(first); }, reduce ? 0 : 1500);
   }
-  renderLegend(); renderPanel();
+  function setMotionBtn() {
+    const b = q('.nv-mo'); b.textContent = motionOn ? '❚❚' : '▶';
+    b.setAttribute('aria-pressed', String(motionOn)); b.setAttribute('aria-label', motionOn ? '움직임 멈추기' : '움직임 켜기'); b.title = b.getAttribute('aria-label');
+  }
+  setMotionBtn(); renderLegend(); renderPanel();
   const ro = new ResizeObserver(() => {
     if (!started) { start(); return; }
     const w = cv.clientWidth;
     if (Math.abs(w - lastW) < 2 && Math.abs(cv.clientHeight - H) < 2) return;
-    lastW = w; resize(); applyMode(.35);
+    lastW = w; resize(); applyMode(.35); renderMini();
   });
   ro.observe(viz);
   const io = new IntersectionObserver(es => { inView = es[0].isIntersecting; }, { threshold: 0 });

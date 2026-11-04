@@ -181,12 +181,26 @@ export function mountNetwork(root, opts) {
   /* ---------- 확대 ---------- */
   const zoom = d3.zoom().scaleExtent([.6, 5]).clickDistance(5)
     .filter(ev => ev.type === 'wheel' ? (ev.ctrlKey || ev.metaKey || (wheelZoom && wide)) : ev.type.startsWith('touch') ? true : !ev.button)
-    .on('zoom', ev => { T = ev.transform; tip.hidden = true; });
+    .on('start', ev => { if (ev.sourceEvent) { autoFit = false; userMoved = true; } })
+    .on('zoom', ev => { T = ev.transform; tip.hidden = true; cv.dataset.k = T.k.toFixed(2); });
   d3.select(cv).call(zoom).on('dblclick.zoom', null);
   // 지도 위에서는 한 손가락으로 끌어 움직이고 두 손가락으로 확대(페이지 넘기기는 지도 밖·아래 패널에서)
   cv.style.touchAction = 'none';
   const center = () => [(AREA.x0 + AREA.x1) / 2, (AREA.y0 + AREA.y1) / 2];
   function zoomTo(t, d) { d3.select(cv).transition().duration(reduce ? 0 : (d == null ? 850 : d)).ease(d3.easeCubicInOut).call(zoom.transform, t); }
+  // 처음 화면: 연결망이 화면을 꽉 채우도록 확대(겹쳐 있는 버튼 뒤로 조금 넘쳐도 됨)
+  const FILL = 1.3;
+  function fitT() {
+    if (S.mode !== 'net' || !people.length) return d3.zoomIdentity;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of people) { if (p.x == null) continue; x0 = Math.min(x0, p.x - p.r - 4); x1 = Math.max(x1, p.x + p.r + 4); y0 = Math.min(y0, p.y - p.r - 4); y1 = Math.max(y1, p.y + p.r + 16); }
+    if (!isFinite(x0)) return d3.zoomIdentity;
+    const bw = Math.max(60, x1 - x0), bh = Math.max(60, y1 - y0), aw = AREA.x1 - AREA.x0, ah = AREA.y1 - AREA.y0;
+    const k = Math.max(.8, Math.min(2.6, aw / bw * FILL, ah / bh * FILL * 1.1)), [cx, cy] = center();
+    return d3.zoomIdentity.translate(cx - k * (x0 + x1) / 2, cy - k * (y0 + y1) / 2).scale(k);
+  }
+  let autoFit = true, userMoved = false, fitK = 1;
+  function refit(d) { userMoved = false; if (S.mode === 'net') { autoFit = true; if (reduce) { autoFit = false; zoomTo(fitT(), 0); } } else zoomTo(d3.zoomIdentity, d); }
   function focusOn(p) {
     const k = Math.min(2.1, Math.max(1.45, T.k)), [cx, cy] = center();
     zoomTo(d3.zoomIdentity.translate(cx - p.x * k, cy - p.y * k).scale(k));
@@ -210,7 +224,7 @@ export function mountNetwork(root, opts) {
     if (onSelect) onSelect(p ? p.uid : null);
     if (p && !noZoom) focusOn(p);
   }
-  function clearSel() { S.sel = null; STAR = []; parts = []; SELSET = new Set(); renderPanel(); if (onSelect) onSelect(null); zoomTo(d3.zoomIdentity); }
+  function clearSel() { S.sel = null; STAR = []; parts = []; SELSET = new Set(); renderPanel(); if (onSelect) onSelect(null); autoFit = false; zoomTo(fitT()); }
 
   /* ---------- 그리기 ---------- */
   function ctrl(a, b) { const dx = b.dx - a.dx, dy = b.dy - a.dy; return [(a.dx + b.dx) / 2 - dy * .16, (a.dy + b.dy) / 2 + dx * .16]; }
@@ -258,6 +272,12 @@ export function mountNetwork(root, opts) {
     raf = requestAnimationFrame(frame);
     if (!inView || !W || T0 == null) return;
     const el = (now - T0) / 1000, dt = Math.min(.05, (now - last) / 1000); last = now;
+    if (autoFit && S.mode === 'net' && !S.sel) {
+      const t = fitT(), a = Math.min(1, dt * 2.5);
+      zoom.transform(d3.select(cv), d3.zoomIdentity.translate(T.x + (t.x - T.x) * a, T.y + (t.y - T.y) * a).scale(T.k + (t.k - T.k) * a));
+      fitK = t.k;
+      if (sim.alpha() < .02 && Math.abs(T.k - t.k) < .004) autoFit = false;
+    }
     const k = T.k, sel = S.sel, hov = S.hover;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.drawImage(bgc, 0, 0, W, H);
     ctx.setTransform(DPR * k, 0, 0, DPR * k, DPR * T.x, DPR * T.y);
@@ -320,7 +340,7 @@ export function mountNetwork(root, opts) {
     const L = new Set();
     if (sel) { L.add(sel); STAR.forEach(s => { L.add(s.a); L.add(s.b); }); if (S.show.fn) PEERS.fn.slice(0, 10).forEach(o => L.add(o)); if (S.show.cohort) PEERS.cohort.forEach(o => L.add(o)); }
     else {
-      if (labelAll || k >= 1.9) people.forEach(p => L.add(p));
+      if (labelAll || k >= 1.9 || (k >= fitK * .97 && Math.sqrt((AREA.x1 - AREA.x0) * (AREA.y1 - AREA.y0) / people.length) >= 62)) people.forEach(p => L.add(p));
       else HUBS.forEach(p => L.add(p));
       if (hov) { L.add(hov); hov.recN.forEach(o => L.add(o)); }
     }
@@ -460,14 +480,14 @@ export function mountNetwork(root, opts) {
     S.mode = b.dataset.mode;
     root.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     applyMode(.9);
-    if (S.sel) { const p = S.sel; setTimeout(() => { if (alive && S.sel === p) focusOn(p); }, reduce ? 0 : 1100); } else zoomTo(d3.zoomIdentity, 700);
+    if (S.sel) { const p = S.sel; setTimeout(() => { if (alive && S.sel === p) focusOn(p); }, reduce ? 0 : 1100); } else refit(700);
   }, on));
   q('.nv-zoom').addEventListener('click', e => {
     const b = e.target.closest('[data-nact]'); if (!b) return;
     const c = center();
     if (b.dataset.nact === 'zin') d3.select(cv).transition().duration(reduce ? 0 : 350).call(zoom.scaleBy, 1.4, c);
     if (b.dataset.nact === 'zout') d3.select(cv).transition().duration(reduce ? 0 : 350).call(zoom.scaleBy, 1 / 1.4, c);
-    if (b.dataset.nact === 'fit') zoomTo(d3.zoomIdentity, 600);
+    if (b.dataset.nact === 'fit') { userMoved = false; autoFit = false; zoomTo(fitT(), 600); }
     if (b.dataset.nact === 'motion') { motionOn = !motionOn; parts = []; setMotionBtn(); try { localStorage.setItem('bm-motion', motionOn ? 'on' : 'off'); } catch (err) { /* 저장 못 해도 지금 화면엔 적용 */ } }
   }, on);
   const qi = q('#nv-q'), sugg = q('.nv-sugg');
@@ -495,6 +515,7 @@ export function mountNetwork(root, opts) {
     const [cx, cy] = center();
     people.forEach(p => { const a = Math.random() * Math.PI * 2, r = Math.random() * 14; p.x = cx + Math.cos(a) * r; p.y = cy + Math.sin(a) * r; p.vx = 0; p.vy = 0; });
     applyMode(1);
+    if (reduce) { autoFit = false; const t = fitT(); fitK = t.k; zoom.transform(d3.select(cv), t); }
     T0 = performance.now(); last = T0;
     const first = initialSel && byUid.get(initialSel);
     if (first) setTimeout(() => { if (alive) select(first); }, reduce ? 0 : 1500);
@@ -509,6 +530,7 @@ export function mountNetwork(root, opts) {
     const w = cv.clientWidth;
     if (Math.abs(w - lastW) < 2 && Math.abs(cv.clientHeight - H) < 2) return;
     lastW = w; resize(); applyMode(.35); renderMini();
+    if (!userMoved && !S.sel) refit(0);
   });
   ro.observe(viz);
   const io = new IntersectionObserver(es => { inView = es[0].isIntersecting; }, { threshold: 0 });

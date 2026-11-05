@@ -1,11 +1,10 @@
 rules_version = '2';
 
-// BM 라운지 보안 규칙 (신청서 방식 · 3판: 학술회 참가자 신분·입학 관심)
+// BM 라운지 보안 규칙 (신청서 방식 · 4판: 이메일은 소개 요청이 수락된 사이에만)
 // 등록은 구글 폼 응답을 시트 자동 연동(운영진 계정) 또는 운영진 화면 '직접 가져오기'로 합니다.
 // 이용자 ID는 '로그인 이메일(소문자)'의 SHA-256 값이라, 같은 이메일로 로그인한 사람만 자기 기록과 연결됩니다.
 //  - 프로필(members): 명부에 올라간(approved) 이용자끼리만 볼 수 있음. 등록은 운영진만.
-//  - 이메일(contacts): 명부에 올라간 이용자끼리 공개(신청서 '공개 동의')
-//      단, 학부생·입학 관심자(학술회 참가자)는 연결 요청이 수락된 상대의 이메일만 봄
+//  - 이메일(contacts): 소개 요청이 수락된 두 사람끼리만 봄(본인·운영진은 항상)
 //  - 휴대폰·입학 안내 동의(private): 본인과 운영진만
 //  - 소개 요청(intros): 보낸 사람과 받은 사람만
 //  - 탈퇴 기록(withdrawn): 다시 가져오기 할 때 되살아나지 않게 남기는 표시(이메일·이름 없음)
@@ -114,14 +113,13 @@ service cloud.firestore {
         && textOk(d.consent.version, 1, 20)
         && d.consent.at is timestamp;
     }
-    function limited() { return limitedData(get(memberPath(myMid())).data); }
     // 둘 사이 소개 요청이 수락됨(어느 쪽이 보냈든)
     function introPath(id) { return /databases/$(database)/documents/intros/$(id); }
     function acceptedIntro(id) { return exists(introPath(id)) && get(introPath(id)).data.status == 'accepted'; }
     function linked(mid) { return acceptedIntro(myMid() + '_' + mid) || acceptedIntro(mid + '_' + myMid()); }
 
     match /contacts/{mid} {
-      allow get: if isAdmin() || isMe(mid) || (isApproved() && isApprovedMid(mid) && (!limited() || linked(mid)));
+      allow get: if isAdmin() || isMe(mid) || (isApproved() && isApprovedMid(mid) && linked(mid));
       allow list: if isAdmin();
       allow create: if isAdmin() && contactOk(request.resource.data, mid)
         && request.resource.data.consent.at == request.time;

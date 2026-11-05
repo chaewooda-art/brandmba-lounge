@@ -224,7 +224,7 @@ function openDemoProfile(id) {
     <dt>줄 수 있는 것</dt><dd>${tags(offerLabels(u))}</dd><dt>필요한 것</dt><dd>${tags(needLabels(u))}</dd>
   </dl>
   ${self ? '' : `<div class="rel"><p class="rel-h">‘나’와의 시너지</p>${syn.reasons.length ? whyList(syn.reasons) : '<p>겹치는 점이 아직 없어요.</p>'}</div>`}
-  <p class="hint">가상의 인물입니다. 실제 라운지에서는 이메일을 확인하고 소개 요청을 보낼 수 있어요.</p>
+  <p class="hint">가상의 인물입니다. 실제 라운지에서는 소개 요청을 보내고, 상대가 수락하면 서로 이메일이 보여요.</p>
   <div class="row-btns">${formLink('btn btn-primary')}<button class="btn btn-ghost" data-act="close">닫기</button></div>`);
 }
 
@@ -290,7 +290,7 @@ V.form = () => {
         ${inp('year', '입학 연도', 'text', 'inputmode="numeric" maxlength="4" placeholder="예: 2015"')}
         ${inp('cohort', '기수 <small>선택</small>', 'text', 'inputmode="numeric" maxlength="2" placeholder="모르면 비워 두세요"')}
       </div>`}
-      <div class="field"><span class="label">로그인 이메일</span><p class="static">${esc(S.user.email)}</p><p class="mini">라운지 이용자에게 보이는 연락처입니다. 바꾸려면 운영진에게 요청해 주세요.</p></div>
+      <div class="field"><span class="label">로그인 이메일</span><p class="static">${esc(S.user.email)}</p><p class="mini">소개 요청이 수락된 상대에게만 보이는 연락처입니다. 바꾸려면 운영진에게 요청해 주세요.</p></div>
     </section>
     <section class="fs" aria-labelledby="fs2"><h2 id="fs2">지금 하는 일과 경력</h2>
       <div class="g2">
@@ -450,7 +450,7 @@ V.intros = () => {
   </article>`; };
   return `<div class="wrap narrow">
   <header class="page-head"><p class="eyebrow-k">소개 요청</p><h1>동문과 연결되는 곳</h1>
-  <p class="sub">소개 요청은 라운지 안에서 먼저 인사를 건네는 방법이에요. 수락하면 ‘연결됨’으로 표시되고, 이메일로 바로 이야기를 이어 가면 됩니다.${isLimited(S.member) ? ' 학부생·입학 관심자는 요청이 수락된 상대의 이메일을 볼 수 있어요.' : ''} 새 요청은 메일로 알려드리지 않으니 가끔 들러 확인해 주세요.</p></header>
+  <p class="sub">소개 요청은 라운지 안에서 먼저 인사를 건네는 방법이에요. 수락하면 ‘연결됨’으로 표시되고 서로의 이메일이 보여요. 이메일로 이야기를 이어 가면 됩니다. 새 요청은 메일로 알려드리지 않으니 가끔 들러 확인해 주세요.</p></header>
   <section class="isec" aria-labelledby="ir"><h2 id="ir">받은 요청 <span class="muted">${R.length}</span></h2>${R.length ? R.map(recv).join('') : '<p class="empty">아직 받은 요청이 없습니다.</p>'}</section>
   <section class="isec" aria-labelledby="is"><h2 id="is">보낸 요청 <span class="muted">${Sn.length}</span></h2>${Sn.length ? Sn.map(sent).join('') : '<p class="empty">지도나 명부에서 동문을 골라 소개 요청을 보내 보세요.</p>'}</section>
 </div>`;
@@ -485,7 +485,7 @@ V.me = () => {
         <dt>휴대폰</dt><dd data-myphone><span class="muted">불러오는 중</span></dd>
         ${u.type === 'conf' ? '<dt>입학 안내</dt><dd data-myadmit><span class="muted">불러오는 중</span></dd>' : ''}
       </dl>
-      ${isLimited(u) ? '<p class="hint">학부생·입학 관심자는 다른 이용자의 이메일을 소개 요청이 수락된 뒤에 볼 수 있어요. 내 이메일은 라운지 이용자에게 보입니다.</p>' : ''}
+      <p class="hint">이메일은 소개 요청이 수락된 상대끼리만 서로 보여요. 휴대폰 번호는 운영진만 봅니다.</p>
       <div class="row-btns"><button class="btn btn-ghost" data-act="edit-profile">프로필 고치기</button><button class="btn btn-ghost" data-act="logout">로그아웃</button></div>
     </section>
   </div>
@@ -762,10 +762,9 @@ function profileHTML(u) {
   <div class="contact" data-contact="${u.uid}"><span class="muted">이메일 불러오는 중</span></div>
   <div class="row-btns"><a class="btn btn-ghost" href="#/net" data-act="map-of" data-id="${u.uid}">지도에서 보기</a>${introCTA(u)}</div>`;
 }
-// 라운지 이용자끼리는 이메일만 보입니다(휴대폰은 운영진만).
-// 학부생·입학 관심자는 소개 요청이 수락된 상대의 이메일만 봅니다.
+// 이메일은 소개 요청이 수락된 두 사람끼리만 보입니다(휴대폰은 운영진만). 운영진은 모두 봅니다.
 const linkedWith = id => { const { s, r } = introWith(id); return !!((s && s.status === 'accepted') || (r && r.status === 'accepted')); };
-const emailLocked = id => id !== S.mid && isLimited(S.member) && !linkedWith(id);
+const emailLocked = id => id !== S.mid && !S.admin && !linkedWith(id);
 const LOCKED_EMAIL = '<span class="mini">이메일</span><span class="muted">소개 요청이 수락되면 이메일이 보여요.</span>';
 function contactHTML(c) {
   if (!c || !c.email) return '<span class="mini">이메일</span><span class="muted">불러오지 못했습니다</span>';
@@ -800,7 +799,7 @@ function openIntro(id) {
   const wantsAdmit = isProspect(me) && !isProspect(u) && u.type !== 'conf';
   const msg = `안녕하세요, ${who}입니다. ${why} 편하실 때 짧게 통화나 커피 한잔 가능할까요?`;
   openModal(`<div class="pm-head"><h2>${esc(u.name)} 님에게 소개 요청</h2></div>
-    <p class="hint">상대는 다음에 라운지에 들어올 때 요청을 보게 됩니다. ${isLimited(me) ? '상대가 수락하면 서로 이메일이 보여요.' : '급하면 프로필에 있는 이메일로 바로 연락해도 됩니다.'}</p>
+    <p class="hint">상대는 다음에 라운지에 들어올 때 요청을 보게 됩니다. 상대가 수락하면 서로 이메일이 보여요.</p>
     <div class="field"><label for="intro-msg">보낼 메시지 <small>최대 500자</small></label><textarea id="intro-msg" rows="5" maxlength="500">${esc(msg)}</textarea><p class="ferr" id="intro-err" role="alert"></p></div>
     <div class="row-btns"><button class="btn btn-primary" data-act="send-intro" data-id="${id}">요청 보내기</button><button class="btn btn-ghost" data-act="close">취소</button></div>`);
 }
@@ -881,7 +880,7 @@ async function fillMyContact() {
   const box = document.querySelector('[data-mycontact]'); if (!box) return;
   const c = await api.getContact(S.mid);
   if (!document.contains(box)) return;
-  box.innerHTML = c ? `${esc(c.email)} <span class="badge ok">라운지 이용자에게 공개</span>` : '<span class="muted">정보 없음</span>';
+  box.innerHTML = c ? `${esc(c.email)} <span class="badge ok">수락한 상대에게만 공개</span>` : '<span class="muted">정보 없음</span>';
   const pb = document.querySelector('[data-myphone]'), ab = document.querySelector('[data-myadmit]');
   if (!pb && !ab) return;
   const pv = await api.getPrivate(S.mid);

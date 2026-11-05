@@ -31,9 +31,10 @@ export function mountNetwork(root, opts) {
   const ac = new AbortController(), on = { signal: ac.signal };
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const touchy = window.matchMedia('(pointer: coarse)').matches;
-  // 흐르는 빛·떠다니는 점. '동작 줄이기'를 켠 기기는 꺼진 채로 시작하고, 지도 오른쪽 아래 버튼으로 켜고 끌 수 있음
-  let motionOn = !reduce;
-  try { const m = localStorage.getItem('bm-motion'); if (m === 'on') motionOn = true; if (m === 'off') motionOn = false; } catch (e) { /* 저장소를 못 쓰면 기본값 */ }
+  // 흐르는 빛·떠다니는 점은 모든 기기에서 켜진 채로 시작(오른쪽 아래 버튼으로 끌 수 있고 기기에 기억).
+  // '동작 줄이기'를 켠 기기는 점이 퍼지는 장면과 확대 이동만 생략하고 완성된 지도에서 바로 시작
+  let motionOn = true;
+  try { if (localStorage.getItem('bm-motion2') === 'off') motionOn = false; } catch (e) { /* 저장소를 못 쓰면 기본값 */ }
   const H_ = arr => (arr || []).map(helpLabel);
 
   /* ---------- 데이터 ---------- */
@@ -488,7 +489,7 @@ export function mountNetwork(root, opts) {
     if (b.dataset.nact === 'zin') d3.select(cv).transition().duration(reduce ? 0 : 350).call(zoom.scaleBy, 1.4, c);
     if (b.dataset.nact === 'zout') d3.select(cv).transition().duration(reduce ? 0 : 350).call(zoom.scaleBy, 1 / 1.4, c);
     if (b.dataset.nact === 'fit') { userMoved = false; autoFit = false; zoomTo(fitT(), 600); }
-    if (b.dataset.nact === 'motion') { motionOn = !motionOn; parts = []; setMotionBtn(); try { localStorage.setItem('bm-motion', motionOn ? 'on' : 'off'); } catch (err) { /* 저장 못 해도 지금 화면엔 적용 */ } }
+    if (b.dataset.nact === 'motion') { motionOn = !motionOn; parts = []; setMotionBtn(); try { localStorage.setItem('bm-motion2', motionOn ? 'on' : 'off'); } catch (err) { /* 저장 못 해도 지금 화면엔 적용 */ } }
   }, on);
   const qi = q('#nv-q'), sugg = q('.nv-sugg');
   let results = [];

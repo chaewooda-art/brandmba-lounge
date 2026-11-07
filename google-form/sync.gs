@@ -123,13 +123,18 @@ function syncRow_(cell) {
   const ex = fs_('get', DOCS + '/members/' + mid);
   const isNew = ex.code === 404;
   if (!isNew && ex.code !== 200) throw new Error('라운지 확인 실패(' + ex.code + ')');
-  const fields = toFields_(Object.assign({}, x.profile, { status: isNew ? 'approved' : ((ex.json.fields.status || {}).stringValue || 'approved') }));
+  // 명부(members)에는 '김○○'처럼 가린 이름, 실명은 contacts 에(본인·운영진·소개 요청이 수락된 상대만 읽음).
+  // 운영진 표시(role: staff)가 붙은 회원은 명부에도 실명, 표시는 그대로 유지
+  const staff = !isNew && ((ex.json.fields.role || {}).stringValue === 'staff');
+  const prof = Object.assign({}, x.profile, { name: staff ? x.profile.name : maskName_(x.profile.name), status: isNew ? 'approved' : ((ex.json.fields.status || {}).stringValue || 'approved') });
+  if (staff) prof.role = 'staff';
+  const fields = toFields_(prof);
   if (!isNew && ex.json.fields.createdAt) fields.createdAt = ex.json.fields.createdAt;
   const now = [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }];
   if (isNew || !ex.json.fields.createdAt) now.push({ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' });
   const writes = [
     { update: { name: DOCS + '/members/' + mid, fields: fields }, updateTransforms: now },
-    { update: { name: DOCS + '/contacts/' + mid, fields: toFields_({ email: x.email, consent: { map: true, privacy: true, version: POLICY_VERSION, via: 'google-form' } }) },
+    { update: { name: DOCS + '/contacts/' + mid, fields: toFields_({ email: x.email, name: x.profile.name, consent: { map: true, privacy: true, version: POLICY_VERSION, via: 'google-form' } }) },
       updateTransforms: [{ fieldPath: 'consent.at', setToServerValue: 'REQUEST_TIME' }] },
     { update: { name: DOCS + '/private/' + mid, fields: toFields_({ phone: x.phone, admitInfo: x.admitInfo }) } }
   ];
@@ -192,6 +197,12 @@ function parseRow_(cell) {
 }
 
 /* ---------- 도우미 ---------- */
+// 김채우 → 김○○ (public/js/constants.js 의 maskName 과 같은 규칙)
+function maskName_(n) {
+  const c = Array.from(String(n || '').trim());
+  return c.length ? c[0] + '○'.repeat(Math.max(1, c.length - 1)) : '';
+}
+
 function sheetFile_() {
   const id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
   if (!id) throw new Error('응답 시트를 모릅니다. createLoungeForm 을 먼저 실행해 주세요.');

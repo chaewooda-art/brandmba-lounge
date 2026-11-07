@@ -16,6 +16,7 @@ import {
   getDocs, onSnapshot, serverTimestamp, writeBatch, deleteField
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { firebaseConfig, POLICY_VERSION } from './config.js';
+import { maskName } from './constants.js';
 
 export const configured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 const app = configured ? initializeApp(firebaseConfig) : null;
@@ -86,8 +87,9 @@ const pickProfile = p => Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k] === u
 // 프로필과 운영진만 보는 정보(휴대폰, 입학 안내 동의)를 함께 저장
 export async function saveProfile(mid, profile, phone, admitInfo) {
   const b = writeBatch(db);
-  // thesis: 예전에 받던 학위논문 제목. 더 쓰지 않으므로 저장할 때 지웁니다.
-  b.update(doc(db, 'members', mid), { ...pickProfile(profile), thesis: deleteField(), updatedAt: serverTimestamp() });
+  // 이름은 본인이 바꾸지 않음(명부엔 가린 이름, 실명은 운영진이 신청서로). thesis: 더 쓰지 않으므로 저장할 때 지웁니다.
+  const { name, ...rest } = pickProfile(profile);
+  b.update(doc(db, 'members', mid), { ...rest, thesis: deleteField(), updatedAt: serverTimestamp() });
   b.set(doc(db, 'private', mid), { phone: phone || '', admitInfo: !!admitInfo }, { merge: true });
   await b.commit();
 }
@@ -105,8 +107,7 @@ const rows = snap => snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 export const listApproved = async () =>
   rows(await getDocs(query(collection(db, 'members'), where('status', '==', 'approved'))));
 
-// 명부에 오른 이용자끼리는 이메일이 보입니다. 읽을 수 없으면 null.
-// 학부생·입학 관심자는 연결 요청이 수락된 상대의 이메일만 읽을 수 있습니다(firestore.rules).
+// 이메일·실명(contacts): 본인, 운영진, 소개 요청이 수락된 상대만 읽을 수 있습니다(firestore.rules). 읽을 수 없으면 null.
 export async function getContact(mid) {
   try {
     const s = await getDoc(doc(db, 'contacts', mid));
@@ -121,7 +122,7 @@ export async function sendIntro(me, toMid, message) {
   const ex = await getDoc(ref);
   if (ex.exists()) throw Object.assign(new Error('exists'), { code: 'intro/exists' });
   await setDoc(ref, {
-    from: me.uid, to: toMid, fromName: me.name, fromCohort: me.cohort ?? null,
+    from: me.uid, to: toMid, fromName: me.storedName ?? me.name, fromCohort: me.cohort ?? null,
     message, status: 'pending', createdAt: serverTimestamp()
   });
 }
@@ -150,6 +151,22 @@ export async function loadAdminData() {
     withdrawn: new Set(w.docs.map(d => d.id))
   };
 }
+// 운영진: 실명 목록 (contacts 전체)
+export async function listNames() {
+  const c = await getDocs(collection(db, 'contacts'));
+  return Object.fromEntries(c.docs.filter(d => d.data().name).map(d => [d.id, d.data().name]));
+}
+// 운영진: 이름 정리. items: [{ mid, full, staff }] → 명부엔 가린 이름(운영진은 실명+운영진 표시), contacts 에 실명
+export async function fixNames(items) {
+  for (let i = 0; i < items.length; i += 200) {
+    const b = writeBatch(db);
+    items.slice(i, i + 200).forEach(it => {
+      b.update(doc(db, 'members', it.mid), { name: it.staff ? it.full : maskName(it.full), role: it.staff ? 'staff' : deleteField(), updatedAt: serverTimestamp() });
+      b.update(doc(db, 'contacts', it.mid), { name: it.full });
+    });
+    await b.commit();
+  }
+}
 export const setStatus = (mid, status) =>
   updateDoc(doc(db, 'members', mid), { status, updatedAt: serverTimestamp() });
 
@@ -159,14 +176,17 @@ export async function importMembers(items, onProgress) {
   for (let i = 0; i < items.length; i += 120) {
     const b = writeBatch(db);
     items.slice(i, i + 120).forEach(it => {
+      const staff = !!(it.existing && it.existing.role === 'staff');
       b.set(doc(db, 'members', it.mid), {
         ...pickProfile(it.profile),
+        name: staff ? it.profile.name : maskName(it.profile.name),
+        ...(staff ? { role: 'staff' } : {}),
         status: it.existing ? it.existing.status : 'approved',
         createdAt: it.existing && it.existing.createdAt ? it.existing.createdAt : serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       b.set(doc(db, 'contacts', it.mid), {
-        email: normEmail(it.contact.email),
+        email: normEmail(it.contact.email), name: it.profile.name,
         consent: { map: true, privacy: true, version: POLICY_VERSION, at: serverTimestamp(), via: 'google-form' }
       });
       b.set(doc(db, 'private', it.mid), { phone: it.contact.phone || '', admitInfo: !!it.contact.admitInfo });

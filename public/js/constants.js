@@ -76,6 +76,9 @@ export const YEARS = {
   y20: '20년 이상'
 };
 
+// 명부에 보이는 이름: 첫 글자만 두고 나머지는 ○ (예: 김채우 → 김○○). 실명은 소개 요청이 수락된 상대·운영진만
+export const maskName = n => { const c = [...String(n || '').trim()]; return c.length ? c[0] + '○'.repeat(Math.max(1, c.length - 1)) : ''; };
+export const isMasked = n => String(n || '').includes('○');
 export const MAX_PICK = 3;
 export const MAX_CAREER = 3;      // 주요 경력 줄 수
 export const CAREER_LEN = 60;     // 경력 한 줄 글자 수

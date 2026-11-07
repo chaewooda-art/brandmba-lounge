@@ -1,7 +1,7 @@
 // 라운지 화면과 흐름 (신청서 방식 · 2판)
 // 구글 폼 신청(구글 로그인) → 운영진이 시트에서 '승인' 체크(자동 연동) → 신청한 구글 계정으로 로그인 → 지도·추천·명부·소개 요청
 
-import { INDUSTRIES as IND, FUNCTIONS as FN, HELPS as HELP, TYPES, STAGES, ADMITS, YEARS, MAX_PICK, MAX_CAREER, CAREER_LEN, ETC_LEN, YEAR_MIN, YEAR_MAX, COHORT_MAX, FORM_COLUMNS as COL, AGREE, ADMIT_INFO_YES } from './constants.js';
+import { INDUSTRIES as IND, FUNCTIONS as FN, HELPS as HELP, TYPES, STAGES, ADMITS, YEARS, MAX_PICK, MAX_CAREER, CAREER_LEN, ETC_LEN, YEAR_MIN, YEAR_MAX, COHORT_MAX, FORM_COLUMNS as COL, AGREE, ADMIT_INFO_YES, maskName, isMasked } from './constants.js';
 import * as api from './api.js';
 import { ENABLE_GOOGLE, FORM_URL } from './config.js';
 import { mountNetwork } from './network.js';
@@ -285,7 +285,7 @@ V.form = () => {
     <section class="fs" aria-labelledby="fs1"><h2 id="fs1">기본 정보</h2>
       ${locked ? fixed('구분', TYPES[f.type]) : grp('type', '구분', TYPES, 1, true)}
       ${confFields}
-      ${inp('name', '이름', 'text', 'autocomplete="name" maxlength="20"')}
+      ${inp('name', '이름 <small>바꾸려면 운영진에게 · 다른 회원에게는 소개 요청이 수락되면 보여요</small>', 'text', 'autocomplete="name" maxlength="20" readonly')}
       ${isConf ? '' : `<div class="g2">
         ${inp('year', '입학 연도', 'text', 'inputmode="numeric" maxlength="4" placeholder="예: 2015"')}
         ${inp('cohort', '기수 <small>선택</small>', 'text', 'inputmode="numeric" maxlength="2" placeholder="모르면 비워 두세요"')}
@@ -355,7 +355,7 @@ function dirCard(u) {
   const cr = careerList(u);
   return `<button class="dcard" data-act="profile" data-id="${u.uid}">
     <span class="dtop"><span>${esc(IND[u.industry] || '')}${yearsLabel(u) ? ' · ' + esc(yearsLabel(u)) : ''}</span><span class="coh">${esc(cohortLabel(u))}</span></span>
-    <span class="dname">${esc(u.name)}${self ? '<span class="me-tag">나</span>' : ''}</span>
+    <span class="dname">${esc(u.name)}${self ? '<span class="me-tag">나</span>' : ''}${staffTag(u)}</span>
     <span class="drole">${esc(u.org)} · ${esc(u.title)}</span>
     ${cr.length ? `<span class="dcareer"><i>경력</i>${esc(cr[0])}${cr.length > 1 ? ` <small>외 ${cr.length - 1}</small>` : ''}</span>` : ''}
     <span class="mini">줄 수 있는 것</span>
@@ -436,7 +436,7 @@ V.intros = () => {
   const who = id => S.members.find(m => m.uid === id);
   const badge = st => ({ pending: '<span class="badge warn">대기 중</span>', accepted: '<span class="badge ok">수락됨</span>', declined: '<span class="badge">거절됨</span>' }[st] || '');
   const recv = i => `<article class="icard">
-    <header><b>${esc(i.fromName)}</b><span>${who(i.from) ? esc(cohortLabel(who(i.from))) : (i.fromCohort ? i.fromCohort + '기' : '')}</span>${badge(i.status)}<time>${when(i.createdAt)}</time></header>
+    <header><b>${esc(who(i.from) ? who(i.from).name : i.fromName)}</b>${who(i.from) ? staffTag(who(i.from)) : ''}<span>${who(i.from) ? esc(cohortLabel(who(i.from))) : (i.fromCohort ? i.fromCohort + '기' : '')}</span>${badge(i.status)}<time>${when(i.createdAt)}</time></header>
     <p class="imsg">${esc(i.message)}</p>
     ${i.status === 'pending' ? `<div class="row-btns"><button class="btn btn-primary btn-sm" data-act="accept" data-id="${esc(i.id)}">수락</button><button class="btn btn-ghost btn-sm" data-act="decline" data-id="${esc(i.id)}">거절</button>${who(i.from) ? `<button class="btn btn-ghost btn-sm" data-act="profile" data-id="${esc(i.from)}">프로필 보기</button>` : ''}</div>` : ''}
     ${i.status === 'accepted' ? `<div class="contact" data-contact="${esc(i.from)}"><span class="muted">이메일 불러오는 중</span></div>` : ''}
@@ -748,7 +748,8 @@ function profileHTML(u) {
   const syn = self ? null : synergy(S.member, u);
   return `<div class="pm-head">
     <p class="dtop"><span>${esc(IND[u.industry] || '')} · ${esc(fnText(u))}</span><span class="coh">${esc(cohortLabel(u))}</span></p>
-    <h2>${esc(u.name)}${self ? '<span class="me-tag">나</span>' : ''}</h2>
+    <h2>${esc(u.name)}${self ? '<span class="me-tag">나</span>' : ''}${staffTag(u)}</h2>
+    ${!self && isMasked(u.name) ? '<p class="mini">이름은 소개 요청이 수락되면 보여요.</p>' : ''}
     <p class="drole">${esc(u.org)} · ${esc(u.title)}${yearsLabel(u) ? ` · ${esc(yearsLabel(u))}` : ''}</p>
   </div>
   ${u.intro ? `<p class="intro">${esc(u.intro)}</p>` : ''}
@@ -795,7 +796,7 @@ function openIntro(id) {
     : has('co') ? `${has('co').t.replace('같은 회사 출신 · ', '')}을(를) 거친 인연이 반가워 연락드립니다.`
     : has('ind') ? `같은 ${IND[u.industry]} 업계에 계셔서 인사드리고 싶어 연락드립니다.`
     : '라운지에서 프로필을 보고 인사드리고 싶어 연락드립니다.';
-  const who = me.type === 'conf' ? `${me.org} ${me.name}` : `${cohortLabel(me)} ${me.name}`;
+  const who = me.type === 'conf' ? `${me.org} ${me.title}` : `${cohortLabel(me)} ${me.title}`;
   const wantsAdmit = isProspect(me) && !isProspect(u) && u.type !== 'conf';
   const msg = `안녕하세요, ${who}입니다. ${why} 편하실 때 짧게 통화나 커피 한잔 가능할까요?`;
   openModal(`<div class="pm-head"><h2>${esc(u.name)} 님에게 소개 요청</h2></div>
@@ -873,7 +874,50 @@ async function show(v) {
 async function loadAdmin() {
   const d = await api.loadAdminData();
   S.all = d.members; S.allContacts = d.contacts; S.withdrawn = d.withdrawn;
+  Object.entries(d.contacts).forEach(([id, c]) => { if (c.name) S.names[id] = c.name; });
+  S.all.forEach(fixName);
   if (approved()) S.members = S.all.filter(m => m.status === 'approved');
+}
+/* ---------- 이름 ----------
+   명부(members)에는 '김○○'처럼 가린 이름만 있고, 실명은 contacts.name 에 있습니다.
+   실명은 본인·운영진·소개 요청이 수락된 상대만 읽을 수 있어서(firestore.rules), 읽힌 사람만 실명으로 바꿔 보여 줍니다.
+   운영진(role: 'staff')은 명부에도 실명이라 모두에게 보입니다. */
+function fixName(m) {
+  if (!m) return m;
+  if (m.storedName == null) m.storedName = m.name;
+  m.name = S.names[m.uid] || m.storedName;
+  return m;
+}
+const staffTag = u => u && u.role === 'staff' ? '<span class="staff-tag">운영진</span>' : '';
+async function loadNames() {
+  if (S.admin) {
+    try { Object.assign(S.names, await api.listNames()); } catch (e) { console.warn(e); }
+    await healNames();
+  } else {
+    const ids = new Set([S.mid]);
+    [...S.intros.received, ...S.intros.sent].filter(i => i.status === 'accepted').forEach(i => ids.add(i.from === S.mid ? i.to : i.from));
+    const got = await Promise.all([...ids].map(async id => [id, await api.getContact(id)]));
+    got.forEach(([id, c]) => { if (c && c.name) S.names[id] = c.name; });
+  }
+  S.members.forEach(fixName); fixName(S.member);
+}
+// 운영진: 예전 방식(명부에 실명)으로 남은 기록을 가린 이름으로 옮기고, 운영진 본인은 실명+운영진 표시로
+async function healNames() {
+  let all;
+  try { all = (await api.loadAdminData()).members; } catch (e) { console.warn(e); return; }
+  const todo = [];
+  all.forEach(m => {
+    const full = S.names[m.uid] || (isMasked(m.name) ? null : m.name);
+    if (!full) return;
+    const staff = m.uid === S.mid || m.role === 'staff';
+    const want = staff ? full : maskName(full);
+    if (m.name !== want || (staff ? m.role !== 'staff' : !!m.role) || S.names[m.uid] !== full) todo.push({ mid: m.uid, full, staff });
+  });
+  if (!todo.length) return;
+  try {
+    await api.fixNames(todo);
+    todo.forEach(t => { S.names[t.mid] = t.full; const x = S.members.find(m => m.uid === t.mid); if (x) { x.storedName = t.staff ? t.full : maskName(t.full); x.role = t.staff ? 'staff' : undefined; } });
+  } catch (e) { console.warn('이름 정리 실패', e); }
 }
 function rerenderAdmin() { if (S.view !== 'admin') return; $('#app').innerHTML = V.admin(); renderAdminList(); }
 async function fillMyContact() {
@@ -902,7 +946,7 @@ async function onAuth(u) {
   if (S.withdrawing) return;
   if (S.unsubMember) { S.unsubMember(); S.unsubMember = null; }
   closeModal(); destroyNet();
-  Object.assign(S, { user: u, mid: null, admin: false, member: null, members: [], intros: { received: [], sent: [] }, all: [], allContacts: {}, withdrawn: new Set(), imp: null, form: null, netSel: null, lastStatus: undefined });
+  Object.assign(S, { user: u, mid: null, admin: false, member: null, members: [], names: {}, intros: { received: [], sent: [] }, all: [], allContacts: {}, withdrawn: new Set(), imp: null, form: null, netSel: null, lastStatus: undefined });
   if (!u) { S.loginTab = 'login'; show('login'); return; }
   if (api.usesPassword(u) && !u.emailVerified) { show('verify'); return; }
   $('#app').innerHTML = V.boot();
@@ -914,6 +958,7 @@ async function onAuth(u) {
 
 async function onMember(m) {
   const prev = S.lastStatus, status = m ? m.status : 'none';
+  fixName(m);
   S.member = m;
   if (prev === status) {
     // 상태는 그대로, 내용만 바뀜(프로필 수정)
@@ -926,6 +971,7 @@ async function onMember(m) {
     try {
       S.members = await api.listApproved();
       S.intros = await api.listIntros(S.mid);
+      await loadNames();
     } catch (e) { console.error(e); toast(errMsg(e)); }
     if (S.view === 'form') S.form = null;
     show(hashView());
@@ -1119,7 +1165,8 @@ document.addEventListener('click', async e => {
       case 'accept': case 'decline': {
         busy(b, true);
         await api.respondIntro(id, a === 'accept' ? 'accepted' : 'declined');
-        toast(a === 'accept' ? '수락했습니다. 이메일로 이야기를 이어 가 보세요.' : '요청을 거절했습니다.');
+        if (a === 'accept') { try { S.intros = await api.listIntros(S.mid); await loadNames(); } catch (e) { console.warn(e); } }
+        toast(a === 'accept' ? '수락했습니다. 이제 서로 이름과 이메일이 보여요.' : '요청을 거절했습니다.');
         show('intros');
         break;
       }

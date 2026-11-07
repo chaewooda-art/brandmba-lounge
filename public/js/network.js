@@ -423,7 +423,7 @@ export function mountNetwork(root, opts) {
     } else {
       const self = p.uid === meUid;
       panel.innerHTML = `<div class="nv-ptop"><span class="nv-k">${self ? 'MY NETWORK' : 'ALUMNI'}</span><button class="nv-close" data-nact="clear">전체 보기</button></div>
-        <h2>${esc(p.name)}${self ? ' <span class="nv-me">나</span>' : ''}</h2>
+        <h2>${esc(p.name)}${self ? ' <span class="nv-me">나</span>' : ''}${p.role === 'staff' ? ' <span class="nv-me nv-staff">운영진</span>' : ''}</h2>
         <p class="nv-meta">${esc(p.lab)} · ${esc(IND[p.industry] || '')} · ${esc(fnText(p))}</p>
         <p class="nv-org">${esc(p.org)}<br><span>${esc(p.title)}</span></p>
         ${(p.career || []).length ? `<p class="nv-d">경력 · ${esc(p.career.join(' / '))}</p>` : ''}

@@ -4,6 +4,8 @@
  * 하는 일
  *  - 응답 시트에서 '승인'을 체크하면 그 줄을 바로 라운지 명부(Firestore)에 올리고 '라운지 반영' 칸에 결과를 적습니다.
  *  - '라운지 반영' 칸을 지우면 그 줄을 다시 반영합니다(신청서를 고친 경우).
+ *  - 반영된 줄의 '승인' 체크를 풀면 그 회원을 라운지 명부에서 숨깁니다(정보는 그대로 보관).
+ *    다시 체크하면 신청서 내용으로 다시 올립니다.
  *  - 매일 아침 8시에 놓친 줄이 없는지 한 번 더 확인합니다.
  *  - 새 신청이 들어오면 이 스크립트 주인에게 알림 메일을 보냅니다.
  *
@@ -35,6 +37,9 @@ const S_COL = {
   agreeMap: '공개 동의', agreePriv: '개인정보 수집·이용 동의', approve: '승인', synced: '라운지 반영'
 };
 const AGREE_TEXT = '동의합니다';
+const APPROVED_RE = /^(true|o|y|yes|예|승인|v|✓|✔|1|☑)$/i;
+// '라운지 반영' 칸 머리말
+const DONE_MARK = '반영됨', OFF_MARK = '승인 해제', OFF_ERR = '오류(승인 해제)';
 const S_ADMIT_INFO_YES = '받을게요';
 
 /* ---------- 처음 설정 ---------- */
@@ -76,7 +81,7 @@ function onSheetEdit(e) {
   });
 }
 
-// 매일 한 번: 승인됐는데 아직 반영 안 된 줄
+// 매일 한 번: 승인됐는데 아직 반영 안 된 줄, 승인을 풀었는데 아직 숨기지 않은 줄
 function syncAll() {
   const sh = responseSheet_(), head = header_(sh);
   if (head.approve == null) { Logger.log('‘승인’ 열이 없습니다.'); return; }
@@ -85,7 +90,7 @@ function syncAll() {
     const all = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getDisplayValues(); // 한 번에 읽기
     for (let r = 2; r <= all.length; r++) n += syncIfNeeded_(sh, r, head, all[r - 1]) ? 1 : 0;
   });
-  Logger.log('반영한 줄: ' + n);
+  Logger.log('반영·숨김 처리한 줄: ' + n);
 }
 
 // 새 신청 알림 메일
@@ -104,18 +109,50 @@ function syncIfNeeded_(sh, r, head, values) {
   const row = values || sh.getRange(r, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
   const cell = k => head[k] == null ? '' : String(row[head[k]] || '').trim();
   if (!cell('email') && !cell('name')) return false;
-  if (!/^(true|o|y|yes|예|승인|v|✓|✔|1|☑)$/i.test(cell('approve'))) return false;
-  if (head.synced == null || cell('synced')) return false;
+  if (head.synced == null) return false;
+  const on = APPROVED_RE.test(cell('approve')), done = cell('synced');
+  const was = p => done.indexOf(p) === 0;
+  let job = null, errHead = '오류 · ';
+  if (on && (!done || was(OFF_MARK) || was(OFF_ERR))) {
+    // 새로 승인 / 승인을 풀었다가 다시 체크(숨긴 회원을 다시 올림)
+    const restore = !!done;
+    job = () => syncRow_(cell, restore);
+  } else if (!on && (was(DONE_MARK) || was(OFF_ERR))) {
+    // 반영된 회원의 승인을 풂 → 명부에서 숨김
+    job = () => hideRow_(cell);
+    errHead = OFF_ERR + ' · ';
+  }
+  if (!job) return false;
   const out = sh.getRange(r, head.synced + 1);
   try {
-    out.setValue(syncRow_(cell));
+    out.setValue(job());
   } catch (err) {
-    out.setValue('오류 · ' + String(err && err.message || err).slice(0, 180));
+    out.setValue(errHead + String(err && err.message || err).slice(0, 180));
   }
   return true;
 }
 
-function syncRow_(cell) {
+// 승인 해제: 명부에서 숨김(status: hidden). 명부·연락처·휴대폰 정보는 지우지 않으므로 다시 체크하면 그대로 복구됩니다.
+// 숨긴 회원은 다른 회원의 명부·지도·추천에서 사라지고, 본인도 '지금은 라운지를 이용할 수 없습니다' 화면만 봅니다.
+function hideRow_(cell) {
+  const mid = sha256hex_(cell('email').toLowerCase());
+  const stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  const ex = fs_('get', DOCS + '/members/' + mid);
+  if (ex.code === 404) return OFF_MARK + ' · ' + stamp + ' · 라운지 명부에 없음';
+  if (ex.code !== 200) throw new Error('라운지 확인 실패(' + ex.code + ')');
+  if ((ex.json.fields.status || {}).stringValue !== 'hidden') {
+    const r = fs_('post', DOCS + ':commit', { writes: [{
+      update: { name: DOCS + '/members/' + mid, fields: { status: { stringValue: 'hidden' } } },
+      updateMask: { fieldPaths: ['status'] },
+      updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }],
+      currentDocument: { exists: true }
+    }] });
+    if (r.code !== 200) throw new Error('숨기기 실패(' + r.code + '): ' + r.text.slice(0, 160));
+  }
+  return OFF_MARK + ' · ' + stamp + ' · 라운지에서 숨김(다시 체크하면 복구)';
+}
+
+function syncRow_(cell, restore) {
   const x = parseRow_(cell);
   if (x.errs.length) return '오류 · ' + x.errs.join(' · ');
   const mid = sha256hex_(x.email);
@@ -126,7 +163,7 @@ function syncRow_(cell) {
   // 명부(members)에는 '김○○'처럼 가린 이름, 실명은 contacts 에(본인·운영진·소개 요청이 수락된 상대만 읽음).
   // 운영진 표시(role: staff)가 붙은 회원은 명부에도 실명, 표시는 그대로 유지
   const staff = !isNew && ((ex.json.fields.role || {}).stringValue === 'staff');
-  const prof = Object.assign({}, x.profile, { name: staff ? x.profile.name : maskName_(x.profile.name), status: isNew ? 'approved' : ((ex.json.fields.status || {}).stringValue || 'approved') });
+  const prof = Object.assign({}, x.profile, { name: staff ? x.profile.name : maskName_(x.profile.name), status: (isNew || restore) ? 'approved' : ((ex.json.fields.status || {}).stringValue || 'approved') });
   if (staff) prof.role = 'staff';
   const fields = toFields_(prof);
   if (!isNew && ex.json.fields.createdAt) fields.createdAt = ex.json.fields.createdAt;
@@ -140,7 +177,7 @@ function syncRow_(cell) {
   ];
   const r = fs_('post', DOCS + ':commit', { writes: writes });
   if (r.code !== 200) throw new Error('저장 실패(' + r.code + '): ' + r.text.slice(0, 160));
-  return '반영됨 · ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + (isNew ? ' · 새로 등록' : ' · 내용 갱신');
+  return DONE_MARK + ' · ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm') + (isNew ? ' · 새로 등록' : restore ? ' · 다시 올림' : ' · 내용 갱신');
 }
 
 // 응답 한 줄 → 프로필 (public/js/app.js 의 parseRow 와 같은 규칙)
